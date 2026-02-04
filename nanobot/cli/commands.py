@@ -1,6 +1,7 @@
 """CLI commands for nanobot."""
 
 import asyncio
+import sys
 from pathlib import Path
 
 import typer
@@ -9,9 +10,27 @@ from rich.table import Table
 
 from nanobot import __version__, __logo__
 
+# Use ASCII on Windows when console encoding is not UTF-8 (e.g. GBK) to avoid UnicodeEncodeError
+def _enc_utf8():
+    enc = getattr(sys.stdout, "encoding", None) or ""
+    return enc.lower().startswith("utf")
+
+
+def _check():
+    return "✓" if _enc_utf8() else "OK"
+
+
+def _cross():
+    return "✗" if _enc_utf8() else "x"
+
+
+def _logo():
+    return __logo__ if _enc_utf8() else "[nanobot]"
+
+
 app = typer.Typer(
     name="nanobot",
-    help=f"{__logo__} nanobot - Personal AI Assistant",
+    help=f"{_logo()} nanobot - Personal AI Assistant",
     no_args_is_help=True,
 )
 
@@ -20,7 +39,7 @@ console = Console()
 
 def version_callback(value: bool):
     if value:
-        console.print(f"{__logo__} nanobot v{__version__}")
+        console.print(f"{_logo()} nanobot v{__version__}")
         raise typer.Exit()
 
 
@@ -56,16 +75,16 @@ def onboard():
     # Create default config
     config = Config()
     save_config(config)
-    console.print(f"[green]✓[/green] Created config at {config_path}")
+    console.print(f"[green]{_check()}[/green] Created config at {config_path}")
     
     # Create workspace
     workspace = get_workspace_path()
-    console.print(f"[green]✓[/green] Created workspace at {workspace}")
+    console.print(f"[green]{_check()}[/green] Created workspace at {workspace}")
     
     # Create default bootstrap files
     _create_workspace_templates(workspace)
     
-    console.print(f"\n{__logo__} nanobot is ready!")
+    console.print(f"\n{_logo()} nanobot is ready!")
     console.print("\nNext steps:")
     console.print("  1. Add your API key to [cyan]~/.nanobot/config.json[/cyan]")
     console.print("     Get one at: https://openrouter.ai/keys")
@@ -171,7 +190,7 @@ def gateway(
         import logging
         logging.basicConfig(level=logging.DEBUG)
     
-    console.print(f"{__logo__} Starting nanobot gateway on port {port}...")
+    console.print(f"{_logo()} Starting nanobot gateway on port {port}...")
     
     config = load_config()
     
@@ -242,15 +261,15 @@ def gateway(
     channels = ChannelManager(config, bus)
     
     if channels.enabled_channels:
-        console.print(f"[green]✓[/green] Channels enabled: {', '.join(channels.enabled_channels)}")
+        console.print(f"[green]{_check()}[/green] Channels enabled: {', '.join(channels.enabled_channels)}")
     else:
         console.print("[yellow]Warning: No channels enabled[/yellow]")
     
     cron_status = cron.status()
     if cron_status["jobs"] > 0:
-        console.print(f"[green]✓[/green] Cron: {cron_status['jobs']} scheduled jobs")
+        console.print(f"[green]{_check()}[/green] Cron: {cron_status['jobs']} scheduled jobs")
     
-    console.print(f"[green]✓[/green] Heartbeat: every 30m")
+    console.print(f"[green]{_check()}[/green] Heartbeat: every 30m")
     
     async def run():
         try:
@@ -318,12 +337,12 @@ def agent(
         # Single message mode
         async def run_once():
             response = await agent_loop.process_direct(message, session_id)
-            console.print(f"\n{__logo__} {response}")
+            console.print(f"\n{_logo()} {response}")
         
         asyncio.run(run_once())
     else:
         # Interactive mode
-        console.print(f"{__logo__} Interactive mode (Ctrl+C to exit)\n")
+        console.print(f"{_logo()} Interactive mode (Ctrl+C to exit)\n")
         
         async def run_interactive():
             while True:
@@ -333,7 +352,7 @@ def agent(
                         continue
                     
                     response = await agent_loop.process_direct(user_input, session_id)
-                    console.print(f"\n{__logo__} {response}\n")
+                    console.print(f"\n{_logo()} {response}\n")
                 except KeyboardInterrupt:
                     console.print("\nGoodbye!")
                     break
@@ -366,7 +385,7 @@ def channels_status():
     wa = config.channels.whatsapp
     table.add_row(
         "WhatsApp",
-        "✓" if wa.enabled else "✗",
+        _check() if wa.enabled else _cross(),
         wa.bridge_url
     )
 
@@ -375,7 +394,7 @@ def channels_status():
     tg_config = f"token: {tg.token[:10]}..." if tg.token else "[dim]not configured[/dim]"
     table.add_row(
         "Telegram",
-        "✓" if tg.enabled else "✗",
+        _check() if tg.enabled else _cross(),
         tg_config
     )
 
@@ -414,7 +433,7 @@ def _get_bridge_dir() -> Path:
         console.print("Try reinstalling: pip install --force-reinstall nanobot")
         raise typer.Exit(1)
     
-    console.print(f"{__logo__} Setting up bridge...")
+    console.print(f"{_logo()} Setting up bridge...")
     
     # Copy to user directory
     user_bridge.parent.mkdir(parents=True, exist_ok=True)
@@ -430,7 +449,7 @@ def _get_bridge_dir() -> Path:
         console.print("  Building...")
         subprocess.run(["npm", "run", "build"], cwd=user_bridge, check=True, capture_output=True)
         
-        console.print("[green]✓[/green] Bridge ready\n")
+        console.print(f"[green]{_check()}[/green] Bridge ready\n")
     except subprocess.CalledProcessError as e:
         console.print(f"[red]Build failed: {e}[/red]")
         if e.stderr:
@@ -447,7 +466,7 @@ def channels_login():
     
     bridge_dir = _get_bridge_dir()
     
-    console.print(f"{__logo__} Starting bridge...")
+    console.print(f"{_logo()} Starting bridge...")
     console.print("Scan the QR code to connect.\n")
     
     try:
@@ -554,7 +573,7 @@ def cron_add(
         channel=channel,
     )
     
-    console.print(f"[green]✓[/green] Added job '{job.name}' ({job.id})")
+    console.print(f"[green]{_check()}[/green] Added job '{job.name}' ({job.id})")
 
 
 @cron_app.command("remove")
@@ -569,7 +588,7 @@ def cron_remove(
     service = CronService(store_path)
     
     if service.remove_job(job_id):
-        console.print(f"[green]✓[/green] Removed job {job_id}")
+        console.print(f"[green]{_check()}[/green] Removed job {job_id}")
     else:
         console.print(f"[red]Job {job_id} not found[/red]")
 
@@ -589,7 +608,7 @@ def cron_enable(
     job = service.enable_job(job_id, enabled=not disable)
     if job:
         status = "disabled" if disable else "enabled"
-        console.print(f"[green]✓[/green] Job '{job.name}' {status}")
+        console.print(f"[green]{_check()}[/green] Job '{job.name}' {status}")
     else:
         console.print(f"[red]Job {job_id} not found[/red]")
 
@@ -610,7 +629,7 @@ def cron_run(
         return await service.run_job(job_id, force=force)
     
     if asyncio.run(run()):
-        console.print(f"[green]✓[/green] Job executed")
+        console.print(f"[green]{_check()}[/green] Job executed")
     else:
         console.print(f"[red]Failed to run job {job_id}[/red]")
 
@@ -629,10 +648,10 @@ def status():
     config = load_config()
     workspace = config.workspace_path
 
-    console.print(f"{__logo__} nanobot Status\n")
+    console.print(f"{_logo()} nanobot Status\n")
 
-    console.print(f"Config: {config_path} {'[green]✓[/green]' if config_path.exists() else '[red]✗[/red]'}")
-    console.print(f"Workspace: {workspace} {'[green]✓[/green]' if workspace.exists() else '[red]✗[/red]'}")
+    console.print(f"Config: {config_path} {'[green]' + _check() + '[/green]' if config_path.exists() else '[red]' + _cross() + '[/red]'}")
+    console.print(f"Workspace: {workspace} {'[green]' + _check() + '[/green]' if workspace.exists() else '[red]' + _cross() + '[/red]'}")
 
     if config_path.exists():
         console.print(f"Model: {config.agents.defaults.model}")
@@ -644,11 +663,11 @@ def status():
         has_gemini = bool(config.providers.gemini.api_key)
         has_vllm = bool(config.providers.vllm.api_base)
         
-        console.print(f"OpenRouter API: {'[green]✓[/green]' if has_openrouter else '[dim]not set[/dim]'}")
-        console.print(f"Anthropic API: {'[green]✓[/green]' if has_anthropic else '[dim]not set[/dim]'}")
-        console.print(f"OpenAI API: {'[green]✓[/green]' if has_openai else '[dim]not set[/dim]'}")
-        console.print(f"Gemini API: {'[green]✓[/green]' if has_gemini else '[dim]not set[/dim]'}")
-        vllm_status = f"[green]✓ {config.providers.vllm.api_base}[/green]" if has_vllm else "[dim]not set[/dim]"
+        console.print(f"OpenRouter API: {'[green]' + _check() + '[/green]' if has_openrouter else '[dim]not set[/dim]'}")
+        console.print(f"Anthropic API: {'[green]' + _check() + '[/green]' if has_anthropic else '[dim]not set[/dim]'}")
+        console.print(f"OpenAI API: {'[green]' + _check() + '[/green]' if has_openai else '[dim]not set[/dim]'}")
+        console.print(f"Gemini API: {'[green]' + _check() + '[/green]' if has_gemini else '[dim]not set[/dim]'}")
+        vllm_status = f"[green]{_check()} {config.providers.vllm.api_base}[/green]" if has_vllm else "[dim]not set[/dim]"
         console.print(f"vLLM/Local: {vllm_status}")
 
 
