@@ -55,6 +55,17 @@ class ChannelManager:
                 logger.info("WhatsApp channel enabled")
             except ImportError as e:
                 logger.warning(f"WhatsApp channel not available: {e}")
+
+        # 企业微信 (WeCom) channel
+        if self.config.channels.wecom.enabled:
+            try:
+                from nanobot.channels.wecom import WeComChannel
+                self.channels["wecom"] = WeComChannel(
+                    self.config.channels.wecom, self.bus
+                )
+                logger.info("WeCom channel enabled")
+            except ImportError as e:
+                logger.warning(f"WeCom channel not available: {e}")
     
     async def start_all(self) -> None:
         """Start WhatsApp channel and the outbound dispatcher."""

@@ -1,10 +1,16 @@
 """Configuration loading utilities."""
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 from nanobot.config.schema import Config
+
+
+def _strip_trailing_commas(text: str) -> str:
+    """Remove trailing commas before ] or } so JSON with trailing commas parses."""
+    return re.sub(r",\s*([}\]])", r"\1", text)
 
 
 def get_config_path() -> Path:
@@ -32,8 +38,16 @@ def load_config(config_path: Path | None = None) -> Config:
     
     if path.exists():
         try:
-            with open(path) as f:
-                data = json.load(f)
+            with open(path, encoding="utf-8") as f:
+                raw = f.read()
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError as e:
+                if "trailing comma" in str(e).lower():
+                    raw = _strip_trailing_commas(raw)
+                    data = json.loads(raw)
+                else:
+                    raise
             return Config.model_validate(convert_keys(data))
         except (json.JSONDecodeError, ValueError) as e:
             print(f"Warning: Failed to load config from {path}: {e}")
@@ -61,10 +75,17 @@ def save_config(config: Config, config_path: Path | None = None) -> None:
         json.dump(data, f, indent=2)
 
 
+def _normalize_key(key: str) -> str:
+    """Normalize JSON key to schema key: camelCase -> snake_case, accept 'apikey' -> 'api_key'."""
+    if key == "apikey":
+        return "api_key"
+    return camel_to_snake(key)
+
+
 def convert_keys(data: Any) -> Any:
     """Convert camelCase keys to snake_case for Pydantic."""
     if isinstance(data, dict):
-        return {camel_to_snake(k): convert_keys(v) for k, v in data.items()}
+        return {_normalize_key(k): convert_keys(v) for k, v in data.items()}
     if isinstance(data, list):
         return [convert_keys(item) for item in data]
     return data
