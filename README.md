@@ -166,12 +166,13 @@ nanobot agent -m "Hello from my local LLM!"
 
 ## 💬 Chat Apps
 
-Talk to your nanobot through Telegram or WhatsApp — anytime, anywhere.
+Talk to your nanobot through Telegram, WhatsApp, or 企业微信 (WeCom) — anytime, anywhere.
 
 | Channel | Setup |
 |---------|-------|
 | **Telegram** | Easy (just a token) |
 | **WhatsApp** | Medium (scan QR) |
+| **企业微信 (WeCom)** | 企业应用（发消息） |
 
 <details>
 <summary><b>Telegram</b> (Recommended)</summary>
@@ -242,6 +243,44 @@ nanobot gateway
 
 </details>
 
+<details>
+<summary><b>企业微信 (WeCom)</b></summary>
+
+通过企业微信「自建应用」向成员发送消息（当前支持**发送**；接收用户消息需在企业微信后台配置回调，后续版本可支持）。
+
+**1. 创建自建应用**
+
+- 登录 [企业微信管理后台](https://work.weixin.qq.com/wework_admin/loginpage_wx)
+- 「应用管理」→「自建」→ 创建应用，记录 **AgentId**、**Secret**
+- 「我的企业」→「企业信息」→ 记录 **企业 ID (corp_id)**
+
+**2. 配置**
+
+```json
+{
+  "channels": {
+    "wecom": {
+      "enabled": true,
+      "corpId": "wwxxxxxxxx",
+      "agentId": 1000002,
+      "secret": "xxxxxxxx",
+      "allowFrom": []
+    }
+  }
+}
+```
+
+- `allowFrom` 为空表示允许所有成员；可填成员 UserID 限制接收范围。
+- 发往某成员时，cron/脚本里 `deliver.to` 填该成员的 **UserID**；发全员可填 `@all`。
+
+**3. 运行**
+
+```bash
+nanobot gateway
+```
+
+</details>
+
 ## ⚙️ Configuration
 
 Config file: `~/.nanobot/config.json`
@@ -286,6 +325,13 @@ Config file: `~/.nanobot/config.json`
     },
     "whatsapp": {
       "enabled": false
+    },
+    "wecom": {
+      "enabled": false,
+      "corpId": "",
+      "agentId": 0,
+      "secret": "",
+      "allowFrom": []
     }
   },
   "tools": {

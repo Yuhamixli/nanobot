@@ -19,10 +19,20 @@ class TelegramConfig(BaseModel):
     allow_from: list[str] = Field(default_factory=list)  # Allowed user IDs or usernames
 
 
+class WeComConfig(BaseModel):
+    """企业微信 (WeCom) channel configuration."""
+    enabled: bool = False
+    corp_id: str = ""  # 企业 ID，在「我的企业」-「企业信息」获取
+    agent_id: int = 0  # 应用 AgentId，在「应用管理」-「自建」里查看
+    secret: str = ""  # 应用 Secret
+    allow_from: list[str] = Field(default_factory=list)  # 允许接收消息的企业成员 UserID，空则允许全部
+
+
 class ChannelsConfig(BaseModel):
     """Configuration for chat channels."""
     whatsapp: WhatsAppConfig = Field(default_factory=WhatsAppConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
+    wecom: WeComConfig = Field(default_factory=WeComConfig)
 
 
 class AgentDefaults(BaseModel):

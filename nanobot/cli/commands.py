@@ -204,10 +204,14 @@ def gateway(
     is_bedrock = model.startswith("bedrock/")
 
     if not api_key and not is_bedrock:
+        from nanobot.config.loader import get_config_path
+        config_path = get_config_path()
         console.print("[red]Error: No API key configured.[/red]")
-        console.print("Set one in ~/.nanobot/config.json under providers.openrouter.apiKey")
+        console.print(f"Config file: [cyan]{config_path}[/cyan]")
+        console.print("Add one of: [cyan]providers.openrouter.apiKey[/cyan], [cyan]providers.openai.apiKey[/cyan], [cyan]providers.anthropic.apiKey[/cyan]")
+        console.print("Example: [dim]{\"providers\": {\"openrouter\": {\"apiKey\": \"sk-or-v1-xxx\"}}}[/dim]")
         raise typer.Exit(1)
-    
+
     provider = LiteLLMProvider(
         api_key=api_key,
         api_base=api_base,
@@ -302,13 +306,14 @@ def agent(
     session_id: str = typer.Option("cli:default", "--session", "-s", help="Session ID"),
 ):
     """Interact with the agent directly."""
-    from nanobot.config.loader import load_config
+    from nanobot.config.loader import load_config, get_config_path
     from nanobot.bus.queue import MessageBus
     from nanobot.providers.litellm_provider import LiteLLMProvider
     from nanobot.agent.loop import AgentLoop
     
     config = load_config()
-    
+    config_path = get_config_path()
+
     api_key = config.get_api_key()
     api_base = config.get_api_base()
     model = config.agents.defaults.model
@@ -316,6 +321,9 @@ def agent(
 
     if not api_key and not is_bedrock:
         console.print("[red]Error: No API key configured.[/red]")
+        console.print(f"Config file: [cyan]{config_path}[/cyan]")
+        console.print("Add one of: [cyan]providers.openrouter.apiKey[/cyan], [cyan]providers.openai.apiKey[/cyan], [cyan]providers.anthropic.apiKey[/cyan]")
+        console.print("Example: [dim]{\"providers\": {\"openrouter\": {\"apiKey\": \"sk-or-v1-xxx\"}}}[/dim]")
         raise typer.Exit(1)
 
     bus = MessageBus()
