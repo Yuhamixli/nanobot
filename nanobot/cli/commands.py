@@ -400,10 +400,29 @@ def channels_status():
     # Telegram
     tg = config.channels.telegram
     tg_config = f"token: {tg.token[:10]}..." if tg.token else "[dim]not configured[/dim]"
+    if getattr(tg, "proxy_url", None) and tg.proxy_url:
+        tg_config += f" proxy: {tg.proxy_url[:20]}..."
     table.add_row(
         "Telegram",
         _check() if tg.enabled else _cross(),
         tg_config
+    )
+
+    # WeCom
+    wc = config.channels.wecom
+    wc_config = f"corp_id: {wc.corp_id[:8]}..." if wc.corp_id else "[dim]not configured[/dim]"
+    table.add_row(
+        "WeCom",
+        _check() if wc.enabled else _cross(),
+        wc_config
+    )
+
+    # 商网 (Shangwang)
+    sw = config.channels.shangwang
+    table.add_row(
+        "商网",
+        _check() if sw.enabled else _cross(),
+        sw.bridge_url
     )
 
     console.print(table)

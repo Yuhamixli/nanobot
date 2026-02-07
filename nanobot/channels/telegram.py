@@ -100,12 +100,16 @@ class TelegramChannel(BaseChannel):
         
         self._running = True
         
-        # Build the application
-        self._app = (
-            Application.builder()
-            .token(self.config.token)
-            .build()
-        )
+        # Build the application (optional proxy for China / restricted networks)
+        builder = Application.builder().token(self.config.token)
+        if getattr(self.config, "proxy_url", None) and self.config.proxy_url.strip():
+            from telegram.request import HTTPXRequest
+            proxy = self.config.proxy_url.strip()
+            request = HTTPXRequest(proxy=proxy)
+            # get_updates 长轮询可能等几十秒，需要更长 read_timeout 避免代理断开报错
+            updates_request = HTTPXRequest(proxy=proxy, read_timeout=60.0, write_timeout=60.0, connect_timeout=15.0)
+            builder = builder.request(request).get_updates_request(updates_request)
+        self._app = builder.build()
         
         # Add message handler for text, photos, voice, documents
         self._app.add_handler(

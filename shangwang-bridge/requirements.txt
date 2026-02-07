@@ -1,0 +1,4 @@
+# shangwang-bridge: CDP mode
+# Windows + China-accessible network for 商网办公
+websockets>=12.0
+aiohttp>=3.9.0

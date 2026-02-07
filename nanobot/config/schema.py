@@ -17,6 +17,7 @@ class TelegramConfig(BaseModel):
     enabled: bool = False
     token: str = ""  # Bot token from @BotFather
     allow_from: list[str] = Field(default_factory=list)  # Allowed user IDs or usernames
+    proxy_url: str = ""  # Optional proxy for api.telegram.org (e.g. http://127.0.0.1:7890 or socks5://127.0.0.1:1080)
 
 
 class WeComConfig(BaseModel):
@@ -28,11 +29,19 @@ class WeComConfig(BaseModel):
     allow_from: list[str] = Field(default_factory=list)  # 允许接收消息的企业成员 UserID，空则允许全部
 
 
+class ShangwangConfig(BaseModel):
+    """商网办公 channel configuration (connects to shangwang-bridge WebSocket)."""
+    enabled: bool = False
+    bridge_url: str = "ws://localhost:3010"
+    allow_from: list[str] = Field(default_factory=list)  # Allowed chat_id/sender, empty = allow all
+
+
 class ChannelsConfig(BaseModel):
     """Configuration for chat channels."""
     whatsapp: WhatsAppConfig = Field(default_factory=WhatsAppConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     wecom: WeComConfig = Field(default_factory=WeComConfig)
+    shangwang: ShangwangConfig = Field(default_factory=ShangwangConfig)
 
 
 class AgentDefaults(BaseModel):

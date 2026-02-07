@@ -127,6 +127,28 @@ nanobot agent -m "What is 2+2?"
 
 That's it! You have a working AI assistant in 2 minutes.
 
+## 🌐 RPA / 浏览器自动化
+
+通过 **browser_automation** 工具，可以让 agent 驱动浏览器：打开外网页面、登录、填表、点击、提取内容，适合与需要在前端操作的平台（如企业商网）对接。
+
+**安装可选依赖**
+
+```bash
+pip install playwright
+playwright install chromium
+```
+
+或安装 nanobot 的 RPA 可选组：`pip install "nanobot-ai[rpa]"`，再执行 `playwright install chromium`。
+
+**使用方式**
+
+直接对 agent 说人话即可，例如：
+
+- 「打开 https://example.com 并提取页面标题」
+- 「打开某商网登录页，在用户名框填 xxx、密码框填 xxx，点登录，然后提取待办列表」
+
+Agent 会调用 `browser_automation`，按步骤执行：`navigate` → `fill` / `click` → `extract`。若页面选择器复杂，可在 AGENTS.md 或对话中说明页面结构（如「登录按钮的 id 是 submit」）以便更稳确定位。
+
 ## 🖥️ Local Models (vLLM)
 
 Run nanobot with your own local models using vLLM or any OpenAI-compatible server.

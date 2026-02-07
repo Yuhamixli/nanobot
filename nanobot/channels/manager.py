@@ -66,7 +66,18 @@ class ChannelManager:
                 logger.info("WeCom channel enabled")
             except ImportError as e:
                 logger.warning(f"WeCom channel not available: {e}")
-    
+
+        # 商网办公 (Shangwang) channel — connects to shangwang-bridge
+        if self.config.channels.shangwang.enabled:
+            try:
+                from nanobot.channels.shangwang import ShangwangChannel
+                self.channels["shangwang"] = ShangwangChannel(
+                    self.config.channels.shangwang, self.bus
+                )
+                logger.info("商网 channel enabled")
+            except ImportError as e:
+                logger.warning(f"商网 channel not available: {e}")
+
     async def start_all(self) -> None:
         """Start WhatsApp channel and the outbound dispatcher."""
         if not self.channels:
