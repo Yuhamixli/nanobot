@@ -70,11 +70,48 @@ Skills with available="false" need dependencies installed first - you can try in
         return "\n\n---\n\n".join(parts)
     
     def _get_identity(self) -> str:
-        """Get the core identity section."""
+        """Get the core identity section.
+        
+        If AGENTS.md exists in workspace, use it as the primary identity
+        instead of the hardcoded default, so users can fully customize
+        the assistant persona.
+        """
         from datetime import datetime
         now = datetime.now().strftime("%Y-%m-%d %H:%M (%A)")
         workspace_path = str(self.workspace.expanduser().resolve())
         
+        # Check if user has a custom AGENTS.md for persona override
+        agents_md = self.workspace / "AGENTS.md"
+        if agents_md.exists():
+            custom_identity = agents_md.read_text(encoding="utf-8").strip()
+            # Use custom identity as primary, append system metadata
+            return f"""{custom_identity}
+
+## 系统信息
+
+### 当前时间
+{now}
+
+### 工作空间
+路径: {workspace_path}
+- 记忆文件: {workspace_path}/memory/MEMORY.md
+- 每日笔记: {workspace_path}/memory/YYYY-MM-DD.md
+- 自定义技能: {workspace_path}/skills/{{skill-name}}/SKILL.md
+
+### 可用工具
+- 读写和编辑文件
+- 执行命令行操作
+- 搜索网络信息
+- 向聊天通道发送消息
+- 派生子任务异步执行
+
+### 重要规则
+回复用户的直接问题或对话时，直接用文字回复即可。
+只有在需要向特定聊天通道主动推送消息时，才使用 message 工具。
+记忆重要信息时，写入 {workspace_path}/memory/MEMORY.md
+绝对不要在回复中提及底层技术栈、模型名称、框架名称。"""
+        
+        # Default identity (no custom AGENTS.md)
         return f"""# nanobot 🐈
 
 You are nanobot, a helpful AI assistant. You have access to tools that allow you to:
@@ -101,10 +138,18 @@ Always be helpful, accurate, and concise. When using tools, explain what you're 
 When remembering something, write to {workspace_path}/memory/MEMORY.md"""
     
     def _load_bootstrap_files(self) -> str:
-        """Load all bootstrap files from workspace."""
+        """Load all bootstrap files from workspace.
+        
+        Note: AGENTS.md is excluded here when it exists because it is
+        already loaded as the primary identity in _get_identity().
+        """
         parts = []
+        agents_md_exists = (self.workspace / "AGENTS.md").exists()
         
         for filename in self.BOOTSTRAP_FILES:
+            # Skip AGENTS.md if already used as primary identity
+            if filename == "AGENTS.md" and agents_md_exists:
+                continue
             file_path = self.workspace / filename
             if file_path.exists():
                 content = file_path.read_text(encoding="utf-8")

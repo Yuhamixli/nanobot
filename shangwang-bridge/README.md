@@ -130,8 +130,40 @@ CDP 目标: http://127.0.0.1:9222
 3. 定时轮询 hook 收集到的新消息，推送给 nanobot
 4. 收到 nanobot 的发送指令时，调用 NIM SDK 的 `sendText` 方法
 
+## 技术细节
+
+### 回显过滤 (Echo Prevention)
+
+nanobot 通过 NIM SDK 发送的消息会被 hook 再次捕获，bridge 通过多层过滤避免自循环：
+
+1. **flow 字段过滤**: NIM SDK 标记 `flow='out'` 的消息直接跳过
+2. **账号 ID 过滤**: 比对 `msg.from` 与登录账号 ID
+3. **已发文本匹配**: 维护最近 50 条已发文本的 deque，匹配则跳过
+4. **时间窗口去重**: 同一 session 内 5 秒内相同文本只转发一次
+
+### 消息 Hook 策略
+
+注入的 JS 使用双重策略确保消息捕获：
+
+1. **Vuex store.subscribe**: 监听 Vue 状态变更中的 NIM 消息
+2. **DOM MutationObserver**: 监听聊天区域 DOM 变化作为兜底
+
+### 当前状态 (2026-02)
+
+- [x] CDP 连接 Avic.exe Electron 渲染进程
+- [x] 自动选择 im-view 目标页面
+- [x] 注入 NIM hook（收消息）
+- [x] 调用 NIM sendText（发消息）
+- [x] 回显过滤 + 去重
+- [x] 与 nanobot gateway 双向通信
+- [ ] 群聊消息支持优化
+- [ ] 图片/文件消息支持
+- [ ] 会话列表管理
+
 ## 故障排除
 
 - **CDP 连接失败**: 确认 Avic.exe 使用 `--remote-debugging-port=9222` 启动
 - **NIM hook 未成功**: 可能 Vue/NIM 尚未初始化，bridge 会自动重试
 - **浏览器访问 `http://localhost:9222`**: 可查看所有可调试页面
+- **消息重复**: 调整 `_DEDUP_WINDOW_SEC`（默认 5 秒）
+- **回复到错误会话**: 检查 sessionId 格式是否为 `p2p-xxx` 或 `team-xxx`

@@ -195,6 +195,7 @@ Talk to your nanobot through Telegram, WhatsApp, or 企业微信 (WeCom) — any
 | **Telegram** | Easy (just a token) |
 | **WhatsApp** | Medium (scan QR) |
 | **企业微信 (WeCom)** | 企业应用（发消息） |
+| **商网办公 (AVIC)** | CDP Bridge（需 Windows） |
 
 <details>
 <summary><b>Telegram</b> (Recommended)</summary>
@@ -300,6 +301,56 @@ nanobot gateway
 ```bash
 nanobot gateway
 ```
+
+</details>
+
+<details>
+<summary><b>商网办公 (Shangwang / AVIC Office)</b></summary>
+
+通过 **Chrome DevTools Protocol (CDP)** 连接已登录的商网办公 Avic.exe（Electron 应用），直接 hook 内嵌的网易云信 NIM SDK，实现消息的实时收发。无需爬虫或 OCR，稳定可靠。
+
+**前提条件**
+- Windows 系统，商网办公 (Avic.exe) 已安装
+- 中国境内网络（商网不支持海外访问）
+
+**1. 启动 Avic.exe（带调试端口）**
+
+修改桌面快捷方式的「目标」，或在 PowerShell 中直接运行：
+
+```powershell
+& "C:\Program Files (x86)\AVIC Office\Avic.exe" --remote-debugging-port=9222
+```
+
+**2. 手动登录商网办公**，进入聊天界面。
+
+**3. 启动 Bridge**
+
+```bash
+cd shangwang-bridge
+pip install -r requirements.txt
+python main.py
+```
+
+**4. 配置 nanobot** (`~/.nanobot/config.json`)
+
+```json
+{
+  "channels": {
+    "shangwang": {
+      "enabled": true,
+      "bridgeUrl": "ws://localhost:3010"
+    }
+  }
+}
+```
+
+**5. 运行**
+
+```bash
+nanobot gateway
+```
+
+> 详细文档见 [shangwang-bridge/README.md](./shangwang-bridge/README.md)
 
 </details>
 
@@ -434,14 +485,23 @@ nanobot/
 │   ├── subagent.py #    Background task execution
 │   └── tools/      #    Built-in tools (incl. spawn)
 ├── skills/         # 🎯 Bundled skills (github, weather, tmux...)
-├── channels/       # 📱 WhatsApp integration
+├── channels/       # 📱 Chat channels
+│   ├── telegram.py #    Telegram bot
+│   ├── whatsapp.py #    WhatsApp (Node bridge)
+│   ├── wecom.py    #    企业微信
+│   └── shangwang.py#    商网办公 (CDP bridge)
 ├── bus/            # 🚌 Message routing
 ├── cron/           # ⏰ Scheduled tasks
 ├── heartbeat/      # 💓 Proactive wake-up
 ├── providers/      # 🤖 LLM providers (OpenRouter, etc.)
 ├── session/        # 💬 Conversation sessions
 ├── config/         # ⚙️ Configuration
-└── cli/            # 🖥️ Commands
+├── cli/            # 🖥️ Commands
+shangwang-bridge/   # 🔌 CDP bridge for AVIC Office
+├── cdp.py          #    CDP client (JS hook injection)
+├── server.py       #    WebSocket server (bridge ↔ nanobot)
+├── config.py       #    Bridge configuration
+└── main.py         #    Entry point
 ```
 
 ## 🤝 Contribute & Roadmap

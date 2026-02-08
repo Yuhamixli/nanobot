@@ -1,0 +1,116 @@
+# nanobot 开发路线图 (TODO)
+
+> 更新时间: 2026-02-07
+
+## 已完成
+
+### Phase 1: 基础架构
+- [x] nanobot 核心 agent loop
+- [x] Telegram 通道集成
+- [x] WhatsApp 通道集成
+- [x] 企业微信通道集成
+- [x] 多轮对话支持
+- [x] Web 搜索工具
+- [x] 文件读写工具
+- [x] Shell 执行工具
+- [x] 浏览器自动化工具
+
+### Phase 2: 商网办公集成
+- [x] 深度分析 Avic.exe 架构（Electron + NIM SDK）
+- [x] shangwang-bridge CDP 模式实现
+- [x] NIM SDK hook 注入（收消息）
+- [x] NIM sendText 调用（发消息）
+- [x] 回显过滤（flow/account/text 三层）
+- [x] 消息去重（时间窗口 dedup）
+- [x] nanobot ShangwangChannel 通道
+- [x] 端到端通信验证：收消息 → nanobot 处理 → 回复到正确会话
+
+---
+
+## 进行中 / 待完成
+
+### Phase 3: 角色 Prompt 与安全 🔒
+- [x] 起草航空工业财务智能办公助手 system prompt（航小智）
+- [ ] 用户测试并调优 prompt（自然度、准确度、安全性）
+- [ ] Prompt 注入攻防测试（DAN / 越狱 / prompt leak）
+- [ ] 多角色支持（不同部门/场景切换不同 persona）
+
+### Phase 4: 本地知识库 (RAG) 📚
+- [ ] 选型与 PoC（见下方方案对比）
+- [ ] 文档导入管道（PDF/Word/Excel → 向量化）
+- [ ] 检索增强生成（RAG）集成到 agent loop
+- [ ] 知识库管理工具（增删改查、索引状态）
+- [ ] 财务领域 embedding 优化（中文 + 专业术语）
+
+#### 知识库方案对比
+
+| 方案 | 适用场景 | 优点 | 缺点 | 推荐度 |
+|------|----------|------|------|--------|
+| **LightRAG + ChromaDB** | 混合图谱+向量 | 多跳推理、低幻觉、轻量 | 需实体抽取管道 | ⭐⭐⭐⭐⭐ |
+| **LlamaIndex + ChromaDB** | 纯向量 RAG | 开箱即用、150+ 数据连接器 | 复杂关系推理弱 | ⭐⭐⭐⭐ |
+| **LangChain + Qdrant** | 编排为主 | 灵活度高、工具链丰富 | 框架偏重 | ⭐⭐⭐ |
+
+**推荐**: 采用 **LightRAG（混合图谱+向量）** 方案，原因：
+1. 财务场景需要多跳推理（如：某子公司 → 所属板块 → 适用政策）
+2. 减少幻觉（6% reduction vs 纯向量），财务数据零容错
+3. 节省 token 消耗（80% reduction），适合高频使用
+4. 本地运行，数据不出网，满足涉密要求
+
+**技术栈**:
+```
+文档 → 分块(512 token/200 overlap) → Embedding(BGE-small-zh)
+                                          ↓
+                                    ChromaDB(向量存储)
+                                    LightRAG(知识图谱)
+                                          ↓
+                                    RAG 检索 → nanobot agent
+```
+
+### Phase 5: 工具调用扩展 🔧
+
+#### 5.1 已有工具
+- `read_file` / `write_file` / `edit_file` — 文件操作
+- `shell` — 命令执行
+- `web_search` / `web_fetch` — 网页搜索与抓取
+- `browser_automation` — 浏览器自动化（Playwright）
+- `message` — 消息推送（各通道）
+- `spawn` — 子 agent 异步执行
+
+#### 5.2 待开发工具
+
+| 工具名 | 功能 | 优先级 | 说明 |
+|--------|------|--------|------|
+| `knowledge_search` | 本地知识库检索 | P0 | RAG 核心，检索财务文档/制度 |
+| `knowledge_ingest` | 文档导入知识库 | P0 | 支持 PDF/Word/Excel/TXT |
+| `calculator` | 精确数值计算 | P1 | 避免 LLM 计算错误，支持财务公式 |
+| `excel_tool` | Excel 读写与分析 | P1 | openpyxl/pandas，读取报表数据 |
+| `calendar` | 日程管理 | P2 | 会议提醒、报表截止日期 |
+| `email_draft` | 邮件草稿生成 | P2 | 生成格式化的财务邮件 |
+| `template_fill` | 模板填充 | P2 | 自动填充财务报表模板 |
+| `ocr` | 图片文字识别 | P3 | 识别扫描件、票据 |
+| `pdf_extract` | PDF 解析 | P1 | 提取 PDF 中的表格和文本 |
+
+#### 5.3 工具开发路径
+
+```
+P0 (本周):  knowledge_search + knowledge_ingest
+P1 (下周):  calculator + excel_tool + pdf_extract
+P2 (2周后): calendar + email_draft + template_fill
+P3 (后续):  ocr + 更多专业工具
+```
+
+### Phase 6: 生产化 🚀
+- [ ] 商网 bridge 开机自启（Windows 服务 / 计划任务）
+- [ ] nanobot gateway 守护进程
+- [ ] 日志收集与监控
+- [ ] 对话审计日志（合规留痕）
+- [ ] 多用户会话隔离
+- [ ] 性能优化（长对话 token 管理）
+
+---
+
+## 备注
+
+- 所有数据本地处理，不出网（满足涉密要求）
+- LLM 通过 OpenRouter 调用，走 HTTPS，无明文传输风险
+- 财务敏感数据不应直接发送给 LLM，RAG 检索结果需脱敏处理
