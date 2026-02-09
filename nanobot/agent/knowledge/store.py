@@ -163,6 +163,10 @@ class KnowledgeStore:
 
     def _get_model(self):
         if self._model is None:
+            import os
+            # 未设置时使用国内镜像，避免直连 huggingface.co 超时；国外用户可设 HF_ENDPOINT=https://huggingface.co
+            if "HF_ENDPOINT" not in os.environ:
+                os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
             self._model = __import__("sentence_transformers").SentenceTransformer(
                 "BAAI/bge-small-zh-v1.5"
             )

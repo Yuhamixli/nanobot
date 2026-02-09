@@ -25,8 +25,9 @@
 
 ## 首次使用前
 
-- 安装 RAG 依赖：`pip install nanobot-ai[rag]`
+- 安装 RAG 依赖：`pip install nanobot-ai[rag]`（或从源码 `pip install -e ".[rag]"`）
 - 若未运行过 `nanobot onboard`，请先运行一次以创建 workspace 和本目录。
+- **首次 ingest 会下载 BGE 中文向量模型**（约数百 MB）。程序已默认使用国内镜像，若仍超时请检查网络；国外用户可设 `HF_ENDPOINT=https://huggingface.co`。
 
 ## 配置（可选）
 
