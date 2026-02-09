@@ -43,6 +43,7 @@ class AgentLoop:
         model: str | None = None,
         max_iterations: int = 20,
         brave_api_key: str | None = None,
+        web_search_proxy: str | None = None,
         exec_config: "ExecToolConfig | None" = None,
         knowledge_config: "KnowledgeConfig | None" = None,
     ):
@@ -53,6 +54,7 @@ class AgentLoop:
         self.model = model or provider.get_default_model()
         self.max_iterations = max_iterations
         self.brave_api_key = brave_api_key
+        self.web_search_proxy = web_search_proxy
         self.exec_config = exec_config or ExecToolConfig()
         self.knowledge_config = knowledge_config or KnowledgeConfig()
         
@@ -87,7 +89,10 @@ class AgentLoop:
         ))
         
         # Web tools
-        self.tools.register(WebSearchTool(api_key=self.brave_api_key))
+        self.tools.register(WebSearchTool(
+            api_key=self.brave_api_key,
+            proxy=self.web_search_proxy,
+        ))
         self.tools.register(WebFetchTool())
         # Browser RPA (optional: needs playwright)
         self.tools.register(BrowserAutomationTool())

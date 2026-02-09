@@ -387,6 +387,27 @@ nanobot knowledge ingest
 
 Config file: `~/.nanobot/config.json`
 
+### Web Search（网页搜索）
+
+Agent 的「搜索互联网」能力依赖 **Brave Search API**。若未配置 `tools.web.search.apiKey`，`web_search` 会报错，agent 会退而用 `web_fetch`、浏览器自动化等方式，效果差（如你看到的「无法直接获取金融新闻」）。
+
+**配置步骤**：在 `~/.nanobot/config.json` 的 `tools.web.search` 中填入 `apiKey`，申请地址：[Brave Search API](https://brave.com/search/api/)（免费档可用）。
+
+```json
+"tools": {
+  "web": {
+    "search": {
+      "apiKey": "BSA-你的Key",
+      "maxResults": 5,
+      "proxy": "http://127.0.0.1:7890"
+    }
+  }
+}
+```
+
+- **国内网络**：Brave API（api.search.brave.com）可能被限速或超时。若网页搜索一直失败，可（二选一）：在 `tools.web.search` 里加上 `proxy`（如本地代理 `http://127.0.0.1:7890`）；或先设置环境变量 `HTTPS_PROXY` 再启动 gateway（如 PowerShell：`$env:HTTPS_PROXY="http://127.0.0.1:7890"; nanobot gateway`）。改配置或环境后需**重启 gateway**。
+- **若使用商网/Telegram 等 gateway**：修改 `config.json` 后必须**重启 nanobot gateway** 才会生效（gateway 只在启动时读一次配置）。
+
 ### Providers
 
 > [!NOTE]

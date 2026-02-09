@@ -243,6 +243,7 @@ def gateway(
         model=config.agents.defaults.model,
         max_iterations=config.agents.defaults.max_tool_iterations,
         brave_api_key=config.tools.web.search.api_key or None,
+        web_search_proxy=config.tools.web.search.proxy or None,
         exec_config=config.tools.exec,
         knowledge_config=config.tools.knowledge,
     )
@@ -356,6 +357,7 @@ def agent(
         provider=provider,
         workspace=config.workspace_path,
         brave_api_key=config.tools.web.search.api_key or None,
+        web_search_proxy=config.tools.web.search.proxy or None,
         exec_config=config.tools.exec,
         knowledge_config=config.tools.knowledge,
     )

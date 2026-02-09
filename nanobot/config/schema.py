@@ -85,6 +85,7 @@ class WebSearchConfig(BaseModel):
     """Web search tool configuration."""
     api_key: str = ""  # Brave Search API key
     max_results: int = 5
+    proxy: str = ""  # 可选，如 http://127.0.0.1:7890，国内请求 Brave API 超时时可配代理
 
 
 class WebToolsConfig(BaseModel):
