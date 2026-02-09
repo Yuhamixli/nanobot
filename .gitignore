@@ -1,5 +1,9 @@
 .assets
 .env
+# 知识库目录：忽略用户放入的文档，保留 README.md
+workspace/knowledge/*
+!workspace/knowledge/README.md
+
 *.pyc
 dist/
 build/
