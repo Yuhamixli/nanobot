@@ -2,6 +2,10 @@
 
 将**制度、规范、政策**等文档放在此目录下。
 
+> **路径说明**：nanobot 默认工作区是 `~/.nanobot/workspace`，因此**实际放文档的目录**是 **`~/.nanobot/workspace/knowledge`**（如 Windows：`C:\Users\你的用户名\.nanobot\workspace\knowledge`），不是项目里的 `workspace\knowledge`。**不要**把文档堆在 workspace 根目录，也不要放进 `knowledge_db`（那是向量库，程序自动用）。首次运行 `nanobot knowledge ingest` 若该目录不存在会自动创建并提示路径。
+
+**推荐**：在 `knowledge` 下按主题建子文件夹，例如 `knowledge/财务制度`、`knowledge/集团发文`。执行 `nanobot knowledge ingest` 会递归导入整个 knowledge；若只导入某一类，可执行 `nanobot knowledge ingest knowledge/财务制度`。
+
 ## 支持格式
 
 - TXT、MD（纯文本 / Markdown）

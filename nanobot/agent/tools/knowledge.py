@@ -56,9 +56,14 @@ class KnowledgeSearchTool(Tool):
             return "Error: query cannot be empty"
         try:
             k = top_k if top_k is not None else self.top_k
+            if self._store.count() == 0:
+                return (
+                    "知识库为空，请先导入文档：将文件放入 workspace 下的 knowledge 目录后执行 "
+                    "nanobot knowledge ingest，或使用 knowledge_ingest 工具导入。"
+                )
             results = self._store.search(query, top_k=k)
             if not results:
-                return f"No relevant content found in the knowledge base for: {query}"
+                return f"未找到与「{query}」相关的内容，可尝试换一种问法或确认相关文档已导入知识库。"
             lines = [f"Knowledge base results for: {query}\n"]
             for i, r in enumerate(results, 1):
                 lines.append(f"--- Result {i} (source: {r.get('source', '')}) ---")

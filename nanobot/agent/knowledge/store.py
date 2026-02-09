@@ -81,6 +81,21 @@ def _load_document(path: Path) -> str:
     raise ValueError(f"Unsupported format: {suffix}. Supported: {SUPPORTED_EXTENSIONS}")
 
 
+def get_rag_import_error() -> str | None:
+    """
+    Return None if RAG deps are OK, else a short message (e.g. "chromadb" or "sentence_transformers").
+    """
+    try:
+        import chromadb
+    except ImportError as e:
+        return f"chromadb ({e!s})"
+    try:
+        from sentence_transformers import SentenceTransformer
+    except ImportError as e:
+        return f"sentence_transformers ({e!s})"
+    return None
+
+
 def get_store(
     workspace: Path,
     chunk_size: int = 512,
@@ -90,10 +105,7 @@ def get_store(
     """
     Return a KnowledgeStore if RAG dependencies are installed, else None.
     """
-    try:
-        import chromadb
-        from sentence_transformers import SentenceTransformer
-    except ImportError:
+    if get_rag_import_error() is not None:
         return None
     return KnowledgeStore(
         workspace=Path(workspace),
@@ -139,9 +151,13 @@ class KnowledgeStore:
     def _get_collection(self):
         if self._collection is None:
             client = self._get_client()
+            # hnsw:search_ef 提高检索召回，避免 n_results 较小时漏掉相关文档
             self._collection = client.get_or_create_collection(
                 name=COLLECTION_NAME,
-                metadata={"description": "nanobot local knowledge base"},
+                metadata={
+                    "description": "nanobot local knowledge base",
+                    "hnsw:search_ef": 64,
+                },
             )
         return self._collection
 
@@ -222,10 +238,13 @@ class KnowledgeStore:
         """Return top-k most relevant chunks with content and source."""
         k = top_k if top_k is not None else self.top_k
         coll = self._get_collection()
+        n = coll.count()
+        if n == 0:
+            return []
         q_emb = self._embed([query])
         results = coll.query(
             query_embeddings=q_emb,
-            n_results=min(k, coll.count() or 1),
+            n_results=min(k, n),
             include=["documents", "metadatas", "distances"],
         )
         if not results or not results["ids"] or not results["ids"][0]:

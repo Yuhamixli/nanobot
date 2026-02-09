@@ -551,13 +551,31 @@ def knowledge_ingest_cmd(
         chunk_overlap=kc.chunk_overlap,
     )
     if store is None:
+        from nanobot.agent.knowledge.store import get_rag_import_error
+        err = get_rag_import_error()
         console.print("[red]RAG dependencies not installed.[/red]")
-        console.print("Run: [cyan]pip install nanobot-ai[rag][/cyan]")
+        if err:
+            console.print(f"[dim]Missing: {err}[/dim]")
+        console.print("[yellow]若已用 pip install nanobot-ai 安装，PyPI 版本可能不包含 [rag]，请任选其一：[/yellow]")
+        console.print('  1. 从源码安装（推荐）：[cyan]pip install -e ".\\[rag\\]"[/cyan]（在项目根目录执行）')
+        console.print("  2. 手动安装依赖：[cyan]pip install chromadb sentence-transformers pypdf python-docx openpyxl[/cyan]")
         raise typer.Exit(1)
     resolved = (workspace / path).resolve()
     if not resolved.exists():
+        if path.strip() in ("knowledge", "knowledge/"):
+            resolved.mkdir(parents=True, exist_ok=True)
+            readme = resolved / "README.md"
+            if not readme.exists():
+                readme.write_text(
+                    "# 知识库\n将制度/政策文档放于此目录，支持 TXT、MD、PDF、Word、Excel。\n然后执行: nanobot knowledge ingest\n",
+                    encoding="utf-8",
+                )
+            console.print(f"[green]{_check()}[/green] 已创建知识库目录，请将文档放入后重新执行 ingest。")
+            console.print(f"路径: [cyan]{resolved}[/cyan]")
+            raise typer.Exit(0)
         console.print(f"[red]Path not found: {resolved}[/red]")
         console.print(f"Workspace: [cyan]{workspace}[/cyan]")
+        console.print("[dim]请将知识文档放在 workspace 下的 knowledge 目录（见上），不是项目里的 workspace\\knowledge。[/dim]")
         raise typer.Exit(1)
     console.print(f"Ingesting [cyan]{resolved}[/cyan] ...")
     result = store.add_documents([resolved], skip_unsupported=True)
@@ -580,7 +598,12 @@ def knowledge_status_cmd():
     config = load_config()
     store = get_store(config.workspace_path)
     if store is None:
-        console.print("[yellow]RAG not installed.[/yellow] Run: pip install nanobot-ai[rag]")
+        from nanobot.agent.knowledge.store import get_rag_import_error
+        err = get_rag_import_error()
+        console.print("[yellow]RAG not installed.[/yellow]")
+        if err:
+            console.print(f"[dim]Missing: {err}[/dim]")
+        console.print("  [cyan]pip install -e \".[rag]\"[/cyan] 或 [cyan]pip install chromadb sentence-transformers pypdf python-docx openpyxl[/cyan]")
         raise typer.Exit(0)
     n = store.count()
     console.print(f"Knowledge base chunks: [cyan]{n}[/cyan]")
