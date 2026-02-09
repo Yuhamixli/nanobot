@@ -354,6 +354,35 @@ nanobot gateway
 
 </details>
 
+<details>
+<summary><b>本地知识库 (RAG)</b></summary>
+
+商网（或任意通道）提问时，agent 可检索本地知识库并基于制度/政策文档回复。
+
+**1. 安装 RAG 依赖**
+
+```bash
+pip install nanobot-ai[rag]
+```
+
+**2. 放置文档**  
+将制度、规范、政策等文件放入 **workspace 下的 `knowledge` 目录**（如 `~/.nanobot/workspace/knowledge/`）。支持：TXT、MD、PDF、Word(.docx)、Excel(.xlsx)。
+
+**3. 导入知识库**
+
+```bash
+nanobot knowledge ingest
+```
+
+或对 agent 说「导入 knowledge 目录到知识库」，agent 会调用 `knowledge_ingest`。
+
+**4. 提问**  
+在商网或 CLI 直接提问，例如「差旅报销标准是什么？」。Agent 会先 `knowledge_search` 检索，再结合结果回答。
+
+可选配置见 `~/.nanobot/config.json` 的 `tools.knowledge`（chunkSize、topK、enabled 等）。详见 [workspace/knowledge/README.md](./workspace/knowledge/README.md)。
+
+</details>
+
 ## ⚙️ Configuration
 
 Config file: `~/.nanobot/config.json`
@@ -428,6 +457,8 @@ Config file: `~/.nanobot/config.json`
 | `nanobot agent` | Interactive chat mode |
 | `nanobot gateway` | Start the gateway |
 | `nanobot status` | Show status |
+| `nanobot knowledge ingest` | Import documents into knowledge base (default: workspace/knowledge) |
+| `nanobot knowledge status` | Show knowledge base chunk count |
 | `nanobot channels login` | Link WhatsApp (scan QR) |
 | `nanobot channels status` | Show channel status |
 

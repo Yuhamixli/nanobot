@@ -98,10 +98,19 @@ class ExecToolConfig(BaseModel):
     restrict_to_workspace: bool = False  # If true, block commands accessing paths outside workspace
 
 
+class KnowledgeConfig(BaseModel):
+    """Local knowledge base (RAG) configuration."""
+    enabled: bool = True
+    chunk_size: int = 512  # tokens (approx chars for Chinese ~2x)
+    chunk_overlap: int = 200
+    top_k: int = 5  # default number of chunks to retrieve per search
+
+
 class ToolsConfig(BaseModel):
     """Tools configuration."""
     web: WebToolsConfig = Field(default_factory=WebToolsConfig)
     exec: ExecToolConfig = Field(default_factory=ExecToolConfig)
+    knowledge: KnowledgeConfig = Field(default_factory=KnowledgeConfig)
 
 
 class Config(BaseSettings):

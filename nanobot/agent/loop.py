@@ -18,6 +18,7 @@ from nanobot.agent.tools.web import WebSearchTool, WebFetchTool
 from nanobot.agent.tools.browser import BrowserAutomationTool
 from nanobot.agent.tools.message import MessageTool
 from nanobot.agent.tools.spawn import SpawnTool
+from nanobot.agent.tools.knowledge import KnowledgeSearchTool, KnowledgeIngestTool
 from nanobot.agent.subagent import SubagentManager
 from nanobot.session.manager import SessionManager
 
@@ -43,8 +44,9 @@ class AgentLoop:
         max_iterations: int = 20,
         brave_api_key: str | None = None,
         exec_config: "ExecToolConfig | None" = None,
+        knowledge_config: "KnowledgeConfig | None" = None,
     ):
-        from nanobot.config.schema import ExecToolConfig
+        from nanobot.config.schema import ExecToolConfig, KnowledgeConfig
         self.bus = bus
         self.provider = provider
         self.workspace = workspace
@@ -52,6 +54,7 @@ class AgentLoop:
         self.max_iterations = max_iterations
         self.brave_api_key = brave_api_key
         self.exec_config = exec_config or ExecToolConfig()
+        self.knowledge_config = knowledge_config or KnowledgeConfig()
         
         self.context = ContextBuilder(workspace)
         self.sessions = SessionManager(workspace)
@@ -96,6 +99,18 @@ class AgentLoop:
         # Spawn tool (for subagents)
         spawn_tool = SpawnTool(manager=self.subagents)
         self.tools.register(spawn_tool)
+
+        # Knowledge base (RAG) tools
+        if self.knowledge_config.enabled:
+            self.tools.register(KnowledgeSearchTool(
+                workspace=self.workspace,
+                top_k=self.knowledge_config.top_k,
+            ))
+            self.tools.register(KnowledgeIngestTool(
+                workspace=self.workspace,
+                chunk_size=self.knowledge_config.chunk_size,
+                chunk_overlap=self.knowledge_config.chunk_overlap,
+            ))
     
     async def run(self) -> None:
         """Run the agent loop, processing messages from the bus."""

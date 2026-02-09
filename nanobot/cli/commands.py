@@ -107,6 +107,7 @@ You are a helpful AI assistant. Be concise, accurate, and friendly.
 - Ask for clarification when the request is ambiguous
 - Use tools to help accomplish tasks
 - Remember important information in your memory files
+- For company policies or regulations: use knowledge_search to query the local knowledge base; use knowledge_ingest to import new documents
 """,
         "SOUL.md": """# Soul
 
@@ -165,6 +166,22 @@ This file stores important information that should persist across sessions.
 """)
         console.print("  [dim]Created memory/MEMORY.md[/dim]")
 
+    # Create knowledge directory for RAG (place policy/docs here, then run nanobot knowledge ingest)
+    knowledge_dir = workspace / "knowledge"
+    knowledge_dir.mkdir(exist_ok=True)
+    knowledge_readme = knowledge_dir / "README.md"
+    if not knowledge_readme.exists():
+        knowledge_readme.write_text("""# Knowledge Base 知识库
+
+将制度、规范、政策等文档放在此目录下，支持格式：TXT、MD、PDF、Word(.docx)、Excel(.xlsx)。
+
+导入到知识库：
+- 命令行：`nanobot knowledge ingest`
+- 或让 agent 执行：knowledge_ingest 工具，path 填 `knowledge`
+
+导入后，用户提问时 agent 会通过 knowledge_search 检索并基于检索结果回答。
+""", encoding="utf-8")
+        console.print("  [dim]Created knowledge/README.md[/dim]")
 
 # ============================================================================
 # Gateway / Server
@@ -227,6 +244,7 @@ def gateway(
         max_iterations=config.agents.defaults.max_tool_iterations,
         brave_api_key=config.tools.web.search.api_key or None,
         exec_config=config.tools.exec,
+        knowledge_config=config.tools.knowledge,
     )
     
     # Create cron service
@@ -339,6 +357,7 @@ def agent(
         workspace=config.workspace_path,
         brave_api_key=config.tools.web.search.api_key or None,
         exec_config=config.tools.exec,
+        knowledge_config=config.tools.knowledge,
     )
     
     if message:
@@ -502,6 +521,70 @@ def channels_login():
         console.print(f"[red]Bridge failed: {e}[/red]")
     except FileNotFoundError:
         console.print("[red]npm not found. Please install Node.js.[/red]")
+
+
+# ============================================================================
+# Knowledge Base Commands
+# ============================================================================
+
+knowledge_app = typer.Typer(help="Local knowledge base (RAG)")
+app.add_typer(knowledge_app, name="knowledge")
+
+
+@knowledge_app.command("ingest")
+def knowledge_ingest_cmd(
+    path: str = typer.Argument(
+        "knowledge",
+        help="Path to file or folder (relative to workspace); default: 'knowledge'",
+    ),
+):
+    """Import documents into the knowledge base. Put files in workspace/knowledge then run this."""
+    from nanobot.config.loader import load_config
+    from nanobot.agent.knowledge.store import get_store, SUPPORTED_EXTENSIONS
+
+    config = load_config()
+    workspace = config.workspace_path
+    kc = config.tools.knowledge
+    store = get_store(
+        workspace,
+        chunk_size=kc.chunk_size,
+        chunk_overlap=kc.chunk_overlap,
+    )
+    if store is None:
+        console.print("[red]RAG dependencies not installed.[/red]")
+        console.print("Run: [cyan]pip install nanobot-ai[rag][/cyan]")
+        raise typer.Exit(1)
+    resolved = (workspace / path).resolve()
+    if not resolved.exists():
+        console.print(f"[red]Path not found: {resolved}[/red]")
+        console.print(f"Workspace: [cyan]{workspace}[/cyan]")
+        raise typer.Exit(1)
+    console.print(f"Ingesting [cyan]{resolved}[/cyan] ...")
+    result = store.add_documents([resolved], skip_unsupported=True)
+    console.print(f"[green]{_check()}[/green] Added {result['added']} chunk(s).")
+    if result.get("errors"):
+        for e in result["errors"][:10]:
+            console.print(f"  [yellow]{e}[/yellow]")
+        if len(result["errors"]) > 10:
+            console.print(f"  ... and {len(result['errors']) - 10} more")
+    if result.get("skipped"):
+        console.print(f"[dim]Skipped (empty): {len(result['skipped'])} file(s)[/dim]")
+
+
+@knowledge_app.command("status")
+def knowledge_status_cmd():
+    """Show knowledge base status (chunk count)."""
+    from nanobot.config.loader import load_config
+    from nanobot.agent.knowledge.store import get_store
+
+    config = load_config()
+    store = get_store(config.workspace_path)
+    if store is None:
+        console.print("[yellow]RAG not installed.[/yellow] Run: pip install nanobot-ai[rag]")
+        raise typer.Exit(0)
+    n = store.count()
+    console.print(f"Knowledge base chunks: [cyan]{n}[/cyan]")
+    console.print(f"Workspace: [dim]{config.workspace_path}[/dim]")
 
 
 # ============================================================================

@@ -36,11 +36,20 @@
 - [ ] 多角色支持（不同部门/场景切换不同 persona）
 
 ### Phase 4: 本地知识库 (RAG) 📚
-- [ ] 选型与 PoC（见下方方案对比）
-- [ ] 文档导入管道（PDF/Word/Excel → 向量化）
-- [ ] 检索增强生成（RAG）集成到 agent loop
-- [ ] 知识库管理工具（增删改查、索引状态）
+- [x] 选型与 PoC（ChromaDB + BGE-small-zh 向量检索，见下方方案对比）
+- [x] 文档导入管道（PDF/Word/Excel/TXT/MD → 分块 → 向量化 → ChromaDB）
+- [x] 检索增强生成（RAG）集成到 agent loop（knowledge_search / knowledge_ingest 工具）
+- [x] 知识库管理：CLI `nanobot knowledge ingest`、`nanobot knowledge status`
+- [ ] **后续接入 LightRAG**（混合图谱+向量，多跳推理、降幻觉、省 token，见下方技术栈）
 - [ ] 财务领域 embedding 优化（中文 + 专业术语）
+
+#### 用户需做（商网提问 + 知识库回复）
+1. 安装 RAG 依赖：`pip install nanobot-ai[rag]`
+2. 将制度/政策文档放入 **workspace 下的 `knowledge` 目录**（如 `~/.nanobot/workspace/knowledge/`）
+3. 执行导入：`nanobot knowledge ingest`（或让 agent 执行 knowledge_ingest，path 填 `knowledge`）
+4. 在商网或任意通道提问，agent 会自动检索知识库并回复
+
+详见 `workspace/knowledge/README.md`。
 
 #### 知识库方案对比
 
@@ -50,13 +59,13 @@
 | **LlamaIndex + ChromaDB** | 纯向量 RAG | 开箱即用、150+ 数据连接器 | 复杂关系推理弱 | ⭐⭐⭐⭐ |
 | **LangChain + Qdrant** | 编排为主 | 灵活度高、工具链丰富 | 框架偏重 | ⭐⭐⭐ |
 
-**推荐**: 采用 **LightRAG（混合图谱+向量）** 方案，原因：
+**规划**：当前为纯向量检索（ChromaDB + BGE），**后续将切换/接入 LightRAG**。采用 LightRAG 的原因：
 1. 财务场景需要多跳推理（如：某子公司 → 所属板块 → 适用政策）
 2. 减少幻觉（6% reduction vs 纯向量），财务数据零容错
 3. 节省 token 消耗（80% reduction），适合高频使用
 4. 本地运行，数据不出网，满足涉密要求
 
-**技术栈**:
+**目标技术栈（LightRAG）**:
 ```
 文档 → 分块(512 token/200 overlap) → Embedding(BGE-small-zh)
                                           ↓
