@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import re
 
 from loguru import logger
 
@@ -9,6 +10,30 @@ from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.config.schema import ShangwangConfig
+
+
+def _markdown_to_plain_text(text: str) -> str:
+    """将 Markdown 转为纯文本，商网办公无法渲染 Markdown 时使用。"""
+    if not text:
+        return text
+    t = text
+    # 代码块 ```...``` -> 保留内容
+    t = re.sub(r"```(?:[\w]*\n)?(.*?)```", r"\1", t, flags=re.DOTALL)
+    # 行内代码 `...` -> 保留内容
+    t = re.sub(r"`([^`]+)`", r"\1", t)
+    # 链接 [text](url) -> text
+    t = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", t)
+    # 加粗 **text** 或 __text__
+    t = re.sub(r"\*\*([^*]+)\*\*", r"\1", t)
+    t = re.sub(r"__([^_]+)__", r"\1", t)
+    # 斜体 *text* 或 _text_（避免误伤列表）
+    t = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"\1", t)
+    t = re.sub(r"(?<!_)_([^_]+)_(?!_)", r"\1", t)
+    # 标题 ## -> 去掉井号，保留内容
+    t = re.sub(r"^#{1,6}\s+", "", t, flags=re.MULTILINE)
+    # 多余空行压缩
+    t = re.sub(r"\n{3,}", "\n\n", t)
+    return t.strip()
 
 
 class ShangwangChannel(BaseChannel):
@@ -66,12 +91,13 @@ class ShangwangChannel(BaseChannel):
             self._ws = None
 
     async def send(self, msg: OutboundMessage) -> None:
-        """Send a message through 商网 bridge."""
+        """Send a message through 商网 bridge. 商网无法渲染 Markdown，自动转为纯文本。"""
         if not self._ws or not self._connected:
             logger.warning("商网 bridge not connected")
             return
         try:
-            payload = {"type": "send", "chat_id": msg.chat_id, "text": msg.content}
+            plain = _markdown_to_plain_text(msg.content)
+            payload = {"type": "send", "chat_id": msg.chat_id, "text": plain}
             await self._ws.send(json.dumps(payload, ensure_ascii=False))
         except Exception as e:
             logger.error("Error sending 商网 message: %s", e)
