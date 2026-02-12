@@ -230,10 +230,10 @@ async def _handle_message(ws: websockets.WebSocketServerProtocol, raw: str) -> N
 
 
 async def _handler(ws: websockets.WebSocketServerProtocol) -> None:
-    """Handle nanobot client WebSocket connection."""
+    """Handle avic shangwang bridge client WebSocket connection."""
     global _client
     _client = ws
-    logger.info("✓ nanobot client connected")
+    logger.info("✓ AVIC shangwang bridge client connected")
 
     # Try CDP connection
     cdp_ok = await _connect_cdp()
@@ -251,7 +251,7 @@ async def _handler(ws: websockets.WebSocketServerProtocol) -> None:
         pass
     finally:
         _client = None
-        logger.info("✗ nanobot client disconnected")
+        logger.info("✗ avic shangwang bridge client disconnected")
 
 
 async def serve() -> None:

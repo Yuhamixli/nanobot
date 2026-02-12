@@ -86,7 +86,7 @@ pip install nanobot-ai
 > [!TIP]
 > Set your API key in `~/.nanobot/config.json`.
 > Get API keys: [OpenRouter](https://openrouter.ai/keys) (LLM) · [Brave Search](https://brave.com/search/api/) (optional, for web search)
-> You can also change the model to `minimax/minimax-m2` for lower cost.
+> 模型在 `agents.defaults.model` 配置，推荐：`anthropic/claude-opus-4-5`、`openai/gpt-4o`；省成本可用 `minimax/minimax-m2`，`moonshotai/kimi-k2.5`。
 
 **1. Initialize**
 
@@ -471,6 +471,39 @@ Agent 的「搜索互联网」能力依赖 **Brave Search API**。若未配置 `
   }
 }
 ```
+
+</details>
+
+<details>
+<summary><b>模型配置 (Model)</b></summary>
+
+Agent 的推理能力（含 gateway、agent 命令、cron、heartbeat）统一使用 `agents.defaults.model`。
+
+**配置位置**：`~/.nanobot/config.json` → `agents.defaults.model`
+
+**推荐强大模型**（需对应 provider 的 apiKey）：
+- `anthropic/claude-opus-4-5` - Claude 最强（Anthropic API）
+- `anthropic/claude-sonnet-4` - 平衡
+- `openai/gpt-4o` - GPT-4o（OpenAI API）
+- `openai/gpt-4o-mini` - 轻量
+
+**通过 OpenRouter**（一个 key 访问多种模型）：
+```json
+{
+  "providers": {
+    "openrouter": {
+      "apiKey": "sk-or-v1-xxx"
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": "anthropic/claude-opus-4-5"
+    }
+  }
+}
+```
+
+修改后需**重启 gateway** 生效。
 
 </details>
 

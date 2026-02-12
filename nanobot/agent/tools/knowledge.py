@@ -1,10 +1,31 @@
 """Knowledge base tools: knowledge_search and knowledge_ingest."""
 
+import re
 from pathlib import Path
 from typing import Any
 
 from nanobot.agent.tools.base import Tool
 from nanobot.agent.knowledge.store import get_store, SUPPORTED_EXTENSIONS
+
+
+def _extract_person_name(query: str) -> str | None:
+    """从「X是谁」「介绍X」等问句中提取人名，用于补充检索。"""
+    q = query.strip()
+    if not q or len(q) < 2:
+        return None
+    # 程昱涵是谁 / 程昱涵是谁啊
+    m = re.match(r"^(.+?)是谁", q)
+    if m:
+        name = m.group(1).strip()
+        if 2 <= len(name) <= 10 and not any(c in name for c in "？?！!。，,、"):
+            return name
+    # 介绍程昱涵 / 程昱涵的介绍
+    m = re.search(r"(?:介绍|关于)\s*(.+?)(?:\s|$|。|？)", q)
+    if m:
+        name = m.group(1).strip()
+        if 2 <= len(name) <= 10:
+            return name
+    return None
 
 RAG_INSTALL_HINT = (
     "Local knowledge base requires RAG dependencies. "
@@ -62,6 +83,18 @@ class KnowledgeSearchTool(Tool):
                     "nanobot knowledge ingest，或使用 knowledge_ingest 工具导入。"
                 )
             results = self._store.search(query, top_k=k)
+            # 人物类问题：补充用纯人名检索，提高 People 目录人物介绍的召回
+            person_name = _extract_person_name(query)
+            if person_name:
+                extra = self._store.search(person_name, top_k=k)
+                seen = {(r.get("content", "")[:100], r.get("source", "")) for r in results}
+                for r in extra:
+                    key = (r.get("content", "")[:100], r.get("source", ""))
+                    if key not in seen:
+                        seen.add(key)
+                        results.append(r)
+                results.sort(key=lambda x: x.get("distance", 999))
+                results = results[:k]
             if not results:
                 return f"未找到与「{query}」相关的内容，可尝试换一种问法或确认相关文档已导入知识库。"
             lines = [f"Knowledge base results for: {query}\n"]
