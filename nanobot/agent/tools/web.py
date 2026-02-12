@@ -4,7 +4,7 @@ import html
 import json
 import os
 import re
-from typing import Any
+from typing import Any, Callable, Coroutine
 from urllib.parse import urlparse
 
 import httpx
@@ -45,7 +45,7 @@ def _validate_url(url: str) -> tuple[bool, str]:
 
 class WebSearchTool(Tool):
     """Search the web using Brave Search API."""
-    
+
     name = "web_search"
     description = "Search the web. Returns titles, URLs, and snippets."
     parameters = {
@@ -56,16 +56,18 @@ class WebSearchTool(Tool):
         },
         "required": ["query"]
     }
-    
+
     def __init__(
         self,
         api_key: str | None = None,
         max_results: int = 5,
         proxy: str | None = None,
+        cache_callback: Callable[[str, str], Coroutine[Any, Any, None]] | None = None,
     ):
         self.api_key = api_key or os.environ.get("BRAVE_API_KEY", "")
         self.max_results = max_results
         self.proxy = (proxy or os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or "").strip() or None
+        self._cache_callback = cache_callback
 
     async def execute(self, query: str, count: int | None = None, **kwargs: Any) -> str:
         if not self.api_key:
@@ -90,7 +92,13 @@ class WebSearchTool(Tool):
                 lines.append(f"{i}. {item.get('title', '')}\n   {item.get('url', '')}")
                 if desc := item.get("description"):
                     lines.append(f"   {desc}")
-            return "\n".join(lines)
+            result = "\n".join(lines)
+            if self._cache_callback and result and not result.startswith("Error"):
+                try:
+                    await self._cache_callback("web_search", query, result)
+                except Exception:
+                    pass
+            return result
         except httpx.TimeoutException as e:
             return (
                 "Error: 请求 Brave Search API 超时。国内网络可配置代理：在 config 的 tools.web.search 中设置 proxy（如 http://127.0.0.1:7890），"
@@ -102,7 +110,7 @@ class WebSearchTool(Tool):
 
 class WebFetchTool(Tool):
     """Fetch and extract content from a URL using Readability."""
-    
+
     name = "web_fetch"
     description = "Fetch URL and extract readable content (HTML → markdown/text)."
     parameters = {
@@ -114,9 +122,14 @@ class WebFetchTool(Tool):
         },
         "required": ["url"]
     }
-    
-    def __init__(self, max_chars: int = 50000):
+
+    def __init__(
+        self,
+        max_chars: int = 50000,
+        cache_callback: Callable[[str, str, str], Coroutine[Any, Any, None]] | None = None,
+    ):
         self.max_chars = max_chars
+        self._cache_callback = cache_callback
     
     async def execute(self, url: str, extractMode: str = "markdown", maxChars: int | None = None, **kwargs: Any) -> str:
         from readability import Document
@@ -154,9 +167,15 @@ class WebFetchTool(Tool):
             truncated = len(text) > max_chars
             if truncated:
                 text = text[:max_chars]
-            
-            return json.dumps({"url": url, "finalUrl": str(r.url), "status": r.status_code,
-                              "extractor": extractor, "truncated": truncated, "length": len(text), "text": text})
+
+            result = json.dumps({"url": url, "finalUrl": str(r.url), "status": r.status_code,
+                                "extractor": extractor, "truncated": truncated, "length": len(text), "text": text})
+            if self._cache_callback and "error" not in result.lower()[:50]:
+                try:
+                    await self._cache_callback("web_fetch", url, result)
+                except Exception:
+                    pass
+            return result
         except Exception as e:
             return json.dumps({"error": str(e), "url": url})
     

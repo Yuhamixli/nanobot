@@ -19,6 +19,7 @@ from nanobot.agent.tools.browser import BrowserAutomationTool
 from nanobot.agent.tools.message import MessageTool
 from nanobot.agent.tools.spawn import SpawnTool
 from nanobot.agent.tools.knowledge import KnowledgeSearchTool, KnowledgeIngestTool
+from nanobot.agent.knowledge.store import get_store
 from nanobot.agent.subagent import SubagentManager
 from nanobot.session.manager import SessionManager
 
@@ -88,12 +89,43 @@ class AgentLoop:
             restrict_to_workspace=self.exec_config.restrict_to_workspace,
         ))
         
-        # Web tools
+        # Web tools (with optional cache callback for web search results)
+        cache_cb = None
+        if self.knowledge_config.enabled and self.knowledge_config.web_cache_enabled:
+            store = get_store(
+                self.workspace,
+                chunk_size=self.knowledge_config.chunk_size,
+                chunk_overlap=self.knowledge_config.chunk_overlap,
+            )
+            if store is not None:
+
+                def _make_cb(ks):
+                    async def _cb(tool_name: str, query_or_url: str, result: str) -> None:
+                        if tool_name == "web_fetch":
+                            try:
+                                data = json.loads(result)
+                                text = data.get("text", "")
+                            except Exception:
+                                return
+                        else:
+                            text = result
+                        if not text or len(text) < 50:
+                            return
+                        ks.add_to_web_cache(
+                            text,
+                            query=query_or_url if tool_name == "web_search" else "",
+                            url=query_or_url if tool_name == "web_fetch" else "",
+                            tool_name=tool_name,
+                        )
+                    return _cb
+
+                cache_cb = _make_cb(store)
         self.tools.register(WebSearchTool(
             api_key=self.brave_api_key,
             proxy=self.web_search_proxy,
+            cache_callback=cache_cb,
         ))
-        self.tools.register(WebFetchTool())
+        self.tools.register(WebFetchTool(cache_callback=cache_cb))
         # Browser RPA (optional: needs playwright)
         self.tools.register(BrowserAutomationTool())
 

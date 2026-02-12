@@ -47,11 +47,13 @@ class HeartbeatService:
         self,
         workspace: Path,
         on_heartbeat: Callable[[str], Coroutine[Any, Any, str]] | None = None,
+        on_interval: Callable[[], Coroutine[Any, Any, None]] | None = None,
         interval_s: int = DEFAULT_HEARTBEAT_INTERVAL_S,
         enabled: bool = True,
     ):
         self.workspace = workspace
         self.on_heartbeat = on_heartbeat
+        self.on_interval = on_interval
         self.interval_s = interval_s
         self.enabled = enabled
         self._running = False
@@ -101,6 +103,11 @@ class HeartbeatService:
     
     async def _tick(self) -> None:
         """Execute a single heartbeat tick."""
+        if self.on_interval:
+            try:
+                await self.on_interval()
+            except Exception as e:
+                logger.debug(f"Heartbeat interval callback: {e}")
         content = self._read_heartbeat_file()
         
         # Skip if HEARTBEAT.md is empty or doesn't exist

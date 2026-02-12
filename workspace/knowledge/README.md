@@ -29,6 +29,14 @@
 - 若未运行过 `nanobot onboard`，请先运行一次以创建 workspace 和本目录。
 - **首次 ingest 会下载 BGE 中文向量模型**（约数百 MB）。程序已默认使用国内镜像，若仍超时请检查网络；国外用户可设 `HF_ENDPOINT=https://huggingface.co`。
 
+## 网络搜索结果缓存（Web Cache）
+
+当 agent 使用 `web_search` 或 `web_fetch` 时，检索结果会自动存入 `knowledge/_cache_web/` 并做向量 ingest，供 `knowledge_search` 检索。重复问题可更快从缓存中回答，无需再次调用网络。
+
+- 缓存目录：`workspace/knowledge/_cache_web/`（程序自动创建）
+- 清理周期：**每周**自动清空（由 gateway 的 heartbeat 触发）
+- 配置：`tools.knowledge.webCacheEnabled` 设为 `false` 可关闭此功能
+
 ## 配置（可选）
 
 在 `~/.nanobot/config.json` 的 `tools.knowledge` 中可调整：
@@ -36,4 +44,5 @@
 - `chunkSize`：分块大小（约 token 数，默认 512）
 - `chunkOverlap`：块重叠（默认 200）
 - `topK`：检索返回条数（默认 5）
+- `webCacheEnabled`：网络搜索缓存（默认 true）
 - `enabled`：设为 `false` 可关闭知识库工具

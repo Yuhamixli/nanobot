@@ -384,7 +384,8 @@ nanobot knowledge ingest
 **4. 提问**  
 在商网或 CLI 直接提问，例如「差旅报销标准是什么？」。Agent 会先 `knowledge_search` 检索，再结合结果回答。
 
-可选配置见 `~/.nanobot/config.json` 的 `tools.knowledge`（chunkSize、topK、enabled 等）。详见 [workspace/knowledge/README.md](./workspace/knowledge/README.md)。
+可选配置见 `~/.nanobot/config.json` 的 `tools.knowledge`（chunkSize、topK、enabled、webCacheEnabled 等）。  
+**网络搜索缓存**：`web_search` / `web_fetch` 结果会自动存入 `knowledge/_cache_web/` 并 ingest，重复问题可更快回答；每周自动清空。详见 [workspace/knowledge/README.md](./workspace/knowledge/README.md)。
 
 </details>
 
@@ -518,6 +519,7 @@ Agent 的推理能力（含 gateway、agent 命令、cron、heartbeat）统一�
 | `nanobot status` | Show status |
 | `nanobot knowledge ingest` | Import documents into knowledge base (default: workspace/knowledge) |
 | `nanobot knowledge status` | Show knowledge base chunk count |
+| `nanobot knowledge clear-web-cache` | Clear web search cache (normally auto-cleared weekly) |
 | `nanobot channels login` | Link WhatsApp (scan QR) |
 | `nanobot channels status` | Show channel status |
 

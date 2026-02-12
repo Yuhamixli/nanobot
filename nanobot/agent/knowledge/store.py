@@ -4,15 +4,20 @@ Local knowledge store: chunk documents, embed with BGE-small-zh, store in Chroma
 Requires: pip install nanobot-ai[rag]
 """
 
+import hashlib
+import os
+import time
 from pathlib import Path
 from typing import Any
 
-import os
 if "HF_ENDPOINT" not in os.environ:
-    os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"·
+    os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 # Approximate tokens to chars for Chinese (BGE/sentence-transformers)
 CHARS_PER_TOKEN = 2
 COLLECTION_NAME = "nanobot_kb"
+WEB_CACHE_COLLECTION = "nanobot_kb_web_cache"
+WEB_CACHE_DIR = "_cache_web"
+CLEANUP_INTERVAL_DAYS = 7
 SUPPORTED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".xlsx"}
 
 
@@ -139,6 +144,7 @@ class KnowledgeStore:
         self._db_path.mkdir(parents=True, exist_ok=True)
         self._client = None
         self._collection = None
+        self._web_cache_collection = None
         self._model = None
 
     def _get_client(self):
@@ -163,6 +169,16 @@ class KnowledgeStore:
                 },
             )
         return self._collection
+
+    def _get_web_cache_collection(self):
+        """Get or create the web cache collection (separate from main KB)."""
+        if self._web_cache_collection is None:
+            client = self._get_client()
+            self._web_cache_collection = client.get_or_create_collection(
+                name=WEB_CACHE_COLLECTION,
+                metadata={"description": "nanobot web search cache", "hnsw:search_ef": 64},
+            )
+        return self._web_cache_collection
 
     def _get_model(self):
         if self._model is None:
@@ -241,37 +257,131 @@ class KnowledgeStore:
         added = len(all_chunks)
         return {"added": added, "skipped": skipped, "errors": errors}
 
+    def add_to_web_cache(
+        self,
+        text: str,
+        query: str = "",
+        url: str = "",
+        tool_name: str = "",
+    ) -> None:
+        """
+        Save web search/fetch result to workspace/knowledge/_cache_web/ and ingest into web cache collection.
+        """
+        if not text or not text.strip():
+            return
+        cache_dir = self.workspace / "knowledge" / WEB_CACHE_DIR
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        ts = int(time.time())
+        # Use hash of query+url to avoid filename collision
+        key = f"{query or url}_{ts}"
+        h = hashlib.md5(key.encode()).hexdigest()[:12]
+        fname = f"web_{ts}_{h}.md"
+        path = cache_dir / fname
+        header = f"---\nquery: {query}\nurl: {url}\ntool: {tool_name}\ntimestamp: {ts}\n---\n\n"
+        path.write_text(header + text.strip(), encoding="utf-8")
+        try:
+            chunks = _chunk_text(text, self.chunk_size, self.chunk_overlap)
+            if not chunks:
+                return
+            rel = f"{WEB_CACHE_DIR}/{fname}"
+            all_ids = [f"{rel}_{i}" for i in range(len(chunks))]
+            all_metadatas = [{"source": rel, "chunk": i} for i in range(len(chunks))]
+            embeddings = self._embed(chunks)
+            wc = self._get_web_cache_collection()
+            wc.add(ids=all_ids, documents=chunks, embeddings=embeddings, metadatas=all_metadatas)
+        except Exception:
+            pass  # Don't fail main flow on cache write
+
+    def clear_web_cache(self) -> None:
+        """Delete web cache files and clear the web cache collection."""
+        cache_dir = self.workspace / "knowledge" / WEB_CACHE_DIR
+        if cache_dir.exists():
+            for f in cache_dir.glob("*.md"):
+                try:
+                    f.unlink()
+                except OSError:
+                    pass
+        try:
+            client = self._get_client()
+            client.delete_collection(WEB_CACHE_COLLECTION)
+            self._web_cache_collection = None
+        except Exception:
+            pass
+        # Update last cleanup timestamp
+        marker = self.workspace / "knowledge" / WEB_CACHE_DIR / ".last_cleanup"
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(str(int(time.time())))
+
+    def should_clear_web_cache(self) -> bool:
+        """Check if a week has passed since last cleanup."""
+        marker = self.workspace / "knowledge" / WEB_CACHE_DIR / ".last_cleanup"
+        if not marker.exists():
+            return True
+        try:
+            last = int(marker.read_text())
+            return (time.time() - last) >= CLEANUP_INTERVAL_DAYS * 86400
+        except Exception:
+            return True
+
     def search(self, query: str, top_k: int | None = None) -> list[dict[str, Any]]:
-        """Return top-k most relevant chunks with content and source."""
+        """Return top-k most relevant chunks with content and source. Merges main KB and web cache."""
         k = top_k if top_k is not None else self.top_k
+        out: list[dict[str, Any]] = []
+        q_emb = self._embed([query])
+        # Main collection
         coll = self._get_collection()
         n = coll.count()
-        if n == 0:
-            return []
-        q_emb = self._embed([query])
-        results = coll.query(
-            query_embeddings=q_emb,
-            n_results=min(k, n),
-            include=["documents", "metadatas", "distances"],
-        )
-        if not results or not results["ids"] or not results["ids"][0]:
-            return []
-        out = []
-        for i, doc_id in enumerate(results["ids"][0]):
-            meta = (results["metadatas"][0] or [{}])[i]
-            dist = (results["distances"][0] or [0])[i]
-            doc = (results["documents"][0] or [""])[i]
-            out.append({
-                "content": doc,
-                "source": meta.get("source", ""),
-                "chunk": meta.get("chunk", 0),
-                "distance": float(dist),
-            })
-        return out
+        if n > 0:
+            main_results = coll.query(
+                query_embeddings=q_emb,
+                n_results=min(k, n),
+                include=["documents", "metadatas", "distances"],
+            )
+            if main_results and main_results["ids"] and main_results["ids"][0]:
+                for i, doc_id in enumerate(main_results["ids"][0]):
+                    meta = (main_results["metadatas"][0] or [{}])[i]
+                    dist = (main_results["distances"][0] or [0])[i]
+                    doc = (main_results["documents"][0] or [""])[i]
+                    out.append({
+                        "content": doc,
+                        "source": meta.get("source", ""),
+                        "chunk": meta.get("chunk", 0),
+                        "distance": float(dist),
+                    })
+        # Web cache collection (merge if exists)
+        try:
+            wc = self._get_web_cache_collection()
+            n_wc = wc.count()
+            if n_wc > 0:
+                wc_results = wc.query(
+                    query_embeddings=q_emb,
+                    n_results=min(k, n_wc),
+                    include=["documents", "metadatas", "distances"],
+                )
+                if wc_results and wc_results["ids"] and wc_results["ids"][0]:
+                    for i, doc_id in enumerate(wc_results["ids"][0]):
+                        meta = (wc_results["metadatas"][0] or [{}])[i]
+                        dist = (wc_results["distances"][0] or [0])[i]
+                        doc = (wc_results["documents"][0] or [""])[i]
+                        out.append({
+                            "content": doc,
+                            "source": meta.get("source", ""),
+                            "chunk": meta.get("chunk", 0),
+                            "distance": float(dist),
+                        })
+        except Exception:
+            pass
+        out.sort(key=lambda x: x.get("distance", 999))
+        return out[:k]
 
     def count(self) -> int:
-        """Total number of chunks in the collection."""
+        """Total number of chunks (main KB + web cache)."""
         try:
-            return self._get_collection().count()
+            n = self._get_collection().count()
+            try:
+                n += self._get_web_cache_collection().count()
+            except Exception:
+                pass
+            return n
         except Exception:
             return 0

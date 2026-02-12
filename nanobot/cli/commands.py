@@ -272,10 +272,25 @@ def gateway(
     async def on_heartbeat(prompt: str) -> str:
         """Execute heartbeat through the agent."""
         return await agent.process_direct(prompt, session_key="heartbeat")
-    
+
+    async def on_heartbeat_interval() -> None:
+        """Periodic maintenance (e.g. weekly web cache cleanup)."""
+        if not config.tools.knowledge.enabled or not config.tools.knowledge.web_cache_enabled:
+            return
+        from nanobot.agent.knowledge.store import get_store
+        store = get_store(
+            config.workspace_path,
+            chunk_size=config.tools.knowledge.chunk_size,
+            chunk_overlap=config.tools.knowledge.chunk_overlap,
+        )
+        if store and store.should_clear_web_cache():
+            store.clear_web_cache()
+            logger.info("Web cache cleared (weekly cleanup)")
+
     heartbeat = HeartbeatService(
         workspace=config.workspace_path,
         on_heartbeat=on_heartbeat,
+        on_interval=on_heartbeat_interval,
         interval_s=30 * 60,  # 30 minutes
         enabled=True
     )
@@ -589,6 +604,25 @@ def knowledge_ingest_cmd(
             console.print(f"  ... and {len(result['errors']) - 10} more")
     if result.get("skipped"):
         console.print(f"[dim]Skipped (empty): {len(result['skipped'])} file(s)[/dim]")
+
+
+@knowledge_app.command("clear-web-cache")
+def knowledge_clear_web_cache_cmd():
+    """Clear web search cache (_cache_web). Normally auto-cleared weekly."""
+    from nanobot.config.loader import load_config
+    from nanobot.agent.knowledge.store import get_store
+
+    config = load_config()
+    store = get_store(config.workspace_path)
+    if store is None:
+        from nanobot.agent.knowledge.store import get_rag_import_error
+        err = get_rag_import_error()
+        console.print("[yellow]RAG not installed.[/yellow]")
+        if err:
+            console.print(f"[dim]Missing: {err}[/dim]")
+        raise typer.Exit(1)
+    store.clear_web_cache()
+    console.print("[green]Web cache cleared.[/green]")
 
 
 @knowledge_app.command("status")
