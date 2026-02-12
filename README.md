@@ -338,11 +338,16 @@ python main.py
   "channels": {
     "shangwang": {
       "enabled": true,
-      "bridgeUrl": "ws://localhost:3010"
+      "bridgeUrl": "ws://localhost:3010",
+      "mentionNames": ["程昱涵"],
+      "groupReplyMaxLength": 200
     }
   }
 }
 ```
+
+- `mentionNames`: 群聊中仅回复 @提及 了这些昵称的消息，私聊不受影响；空数组则回复所有群消息
+- `groupReplyMaxLength`: 群聊回复最大字数（默认 200），超出自动截断
 
 **5. 运行**
 

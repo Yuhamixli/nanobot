@@ -83,11 +83,16 @@ CDP 目标: http://127.0.0.1:9222
   "channels": {
     "shangwang": {
       "enabled": true,
-      "bridgeUrl": "ws://localhost:3010"
+      "bridgeUrl": "ws://localhost:3010",
+      "mentionNames": ["程昱涵"],
+      "groupReplyMaxLength": 200
     }
   }
 }
 ```
+
+- `mentionNames`: 群聊仅回复 @提及 了这些昵称的消息，私聊直接回复；空数组则回复所有群消息
+- `groupReplyMaxLength`: 群聊回复最大字数（默认 200），超出自动截断
 
 然后 `nanobot gateway`。
 
@@ -108,7 +113,8 @@ CDP 目标: http://127.0.0.1:9222
 ### Bridge → nanobot（上行）
 
 ```json
-{"type": "message", "sender": "张三", "chat_id": "p2p-xxx", "content": "你好", "msg_type": "text"}
+{"type": "message", "sender": "张三", "chat_id": "p2p-xxx", "content": "你好", "msg_type": "text", "is_group": false}
+{"type": "message", "sender": "李四", "chat_id": "team-xxx", "content": "@程昱涵 帮忙查一下", "msg_type": "text", "is_group": true}
 {"type": "status", "status": "ready"}
 {"type": "error", "error": "..."}
 {"type": "sessions", "data": {"ok": true, "currSession": "p2p-xxx", "sessions": [...]}}
@@ -156,7 +162,7 @@ nanobot 通过 NIM SDK 发送的消息会被 hook 再次捕获，bridge 通过�
 - [x] 调用 NIM sendText（发消息）
 - [x] 回显过滤 + 去重
 - [x] 与 nanobot gateway 双向通信
-- [ ] 群聊消息支持优化
+- [x] 群聊仅回复 @提及 的消息（可配置 `mentionNames`）
 - [ ] 图片/文件消息支持
 - [ ] 会话列表管理
 

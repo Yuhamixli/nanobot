@@ -150,6 +150,7 @@ async def _poll_messages():
                     cutoff = now - _DEDUP_WINDOW_SEC * 2
                     _recent_forwarded.clear()
 
+                is_group = "team" in session_id
                 payload = {
                     "type": "message",
                     "sender": from_nick,
@@ -157,6 +158,7 @@ async def _poll_messages():
                     "content": text,
                     "msg_type": msg.get("msgType", "text"),
                     "timestamp": msg.get("time", time.time()),
+                    "is_group": is_group,
                 }
                 try:
                     await _client.send(json.dumps(payload, ensure_ascii=False))

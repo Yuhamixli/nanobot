@@ -90,6 +90,17 @@ class ShangwangChannel(BaseChannel):
             await self._ws.close()
             self._ws = None
 
+    def _is_mentioned(self, content: str) -> bool:
+        """检查消息是否 @提及 了任一配置的昵称。"""
+        if not content or not self.config.mention_names:
+            return False
+        for name in self.config.mention_names:
+            if not name:
+                continue
+            if f"@{name}" in content:
+                return True
+        return False
+
     async def send(self, msg: OutboundMessage) -> None:
         """Send a message through 商网 bridge. 商网无法渲染 Markdown，自动转为纯文本。"""
         if not self._ws or not self._connected:
@@ -97,6 +108,12 @@ class ShangwangChannel(BaseChannel):
             return
         try:
             plain = _markdown_to_plain_text(msg.content)
+            # 群聊回复截断至配置的最大字数
+            if "team" in msg.chat_id:
+                max_len = self.config.group_reply_max_length
+                if len(plain) > max_len:
+                    plain = plain[:max_len].rstrip() + "…"
+                    logger.debug("群聊回复已截断至 %d 字", max_len)
             payload = {"type": "send", "chat_id": msg.chat_id, "text": plain}
             await self._ws.send(json.dumps(payload, ensure_ascii=False))
         except Exception as e:
@@ -118,13 +135,22 @@ class ShangwangChannel(BaseChannel):
             sender = data.get("sender", "shangwang")
             chat_id = data.get("chat_id", "current")
             content = data.get("content", "")
+            is_group = data.get("is_group", False)
+
             if not self.is_allowed(sender):
                 return
+
+            # 群聊：仅当配置了 mention_names 且消息 @提及 了任一配置名时才回复
+            if is_group and self.config.mention_names:
+                if not self._is_mentioned(content):
+                    logger.debug("群聊消息未 @提及 配置昵称，跳过: %s", content[:50])
+                    return
+
             await self._handle_message(
                 sender_id=sender,
                 chat_id=chat_id,
                 content=content,
-                metadata={"timestamp": data.get("timestamp")},
+                metadata={"timestamp": data.get("timestamp"), "is_group": is_group},
             )
         elif msg_type == "status":
             logger.info("商网 bridge status: {}", data.get("status"))

@@ -34,6 +34,10 @@ class ShangwangConfig(BaseModel):
     enabled: bool = False
     bridge_url: str = "ws://localhost:3010"
     allow_from: list[str] = Field(default_factory=list)  # Allowed chat_id/sender, empty = allow all
+    # 群聊仅回复 @提及 的消息，可配置多个昵称（如 ["程昱涵"]），私聊不受影响
+    mention_names: list[str] = Field(default_factory=list)
+    # 群聊回复最大字数（字符），超出则截断
+    group_reply_max_length: int = 200
 
 
 class ChannelsConfig(BaseModel):
