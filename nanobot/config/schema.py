@@ -38,6 +38,9 @@ class ShangwangConfig(BaseModel):
     mention_names: list[str] = Field(default_factory=list)
     # 群聊回复最大字数（字符），超出则截断
     group_reply_max_length: int = 200
+    # 私聊中过短消息（如「好的」「1」、emoji）不回复，≤N 字符则跳过
+    skip_short_replies: bool = True
+    short_reply_max_length: int = 2
 
 
 class ChannelsConfig(BaseModel):

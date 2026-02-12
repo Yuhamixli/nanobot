@@ -146,6 +146,13 @@ class ShangwangChannel(BaseChannel):
                     logger.debug("群聊消息未 @提及 配置昵称，跳过: %s", content[:50])
                     return
 
+            # 私聊：过短消息（如「好的」「1」、emoji）不回复
+            if not is_group and self.config.skip_short_replies:
+                stripped = content.strip()
+                if len(stripped) <= self.config.short_reply_max_length:
+                    logger.debug("私聊消息过短，跳过: %s", repr(stripped[:20]))
+                    return
+
             await self._handle_message(
                 sender_id=sender,
                 chat_id=chat_id,
