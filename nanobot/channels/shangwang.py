@@ -91,13 +91,14 @@ class ShangwangChannel(BaseChannel):
             self._ws = None
 
     def _is_mentioned(self, content: str) -> bool:
-        """检查消息是否 @提及 了任一配置的昵称。"""
+        """检查消息是否 @提及 了任一配置的昵称。支持 @程昱涵、@ 程昱涵 等格式。"""
         if not content or not self.config.mention_names:
             return False
         for name in self.config.mention_names:
             if not name:
                 continue
-            if f"@{name}" in content:
+            # @程昱涵 或 @ 程昱涵
+            if re.search(r"@\s*" + re.escape(name), content):
                 return True
         return False
 

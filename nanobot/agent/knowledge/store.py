@@ -7,6 +7,9 @@ Requires: pip install nanobot-ai[rag]
 from pathlib import Path
 from typing import Any
 
+import os
+if "HF_ENDPOINT" not in os.environ:
+    os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"·
 # Approximate tokens to chars for Chinese (BGE/sentence-transformers)
 CHARS_PER_TOKEN = 2
 COLLECTION_NAME = "nanobot_kb"
