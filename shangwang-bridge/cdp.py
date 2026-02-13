@@ -444,30 +444,32 @@ _SEND_SCRIPT_TEMPLATE = r"""
 }})()
 """
 
-# JS to get current session info
+# JS to get current session info (Vue 2 & 3)
 _SESSION_INFO_SCRIPT = r"""
 (function() {
     try {
         var app = document.querySelector('#app');
+        var store = null;
         if (app && app.__vue_app__) {
-            var store = app.__vue_app__.config.globalProperties.$store;
-            if (store) {
-                var state = store.state;
-                var currSession = state.currSessionId || state.currentSessionId || '';
-                var sessions = [];
-                if (state.sessionList) {
-                    for (var i = 0; i < Math.min(state.sessionList.length, 20); i++) {
-                        var s = state.sessionList[i];
-                        sessions.push({
-                            id: s.id || '',
-                            name: s.name || s.nick || '',
-                            lastMsg: (s.lastMsg && s.lastMsg.text) || '',
-                            unread: s.unread || 0
-                        });
-                    }
-                }
-                return JSON.stringify({ok: true, currSession: currSession, sessions: sessions});
+            store = app.__vue_app__.config.globalProperties.$store;
+        } else if (app && app.__vue__ && app.__vue__.$store) {
+            store = app.__vue__.$store;
+        }
+        if (store && store.state) {
+            var state = store.state;
+            var currSession = state.currSessionId || state.currentSessionId || '';
+            var sessions = [];
+            var list = state.sessionList || state.sessions || [];
+            for (var i = 0; i < Math.min(list.length, 30); i++) {
+                var s = list[i];
+                sessions.push({
+                    id: s.id || s.sessionId || '',
+                    name: s.name || s.nick || s.title || '',
+                    lastMsg: (s.lastMsg && s.lastMsg.text) || (s.lastMsg && s.lastMsg.content) || '',
+                    unread: s.unread || 0
+                });
             }
+            return JSON.stringify({ok: true, currSession: currSession, sessions: sessions});
         }
     } catch(e) {
         return JSON.stringify({ok: false, error: e.message});
