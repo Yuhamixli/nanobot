@@ -116,7 +116,8 @@ class KnowledgeConfig(BaseModel):
     chunk_size: int = 512  # tokens (approx chars for Chinese ~2x)
     chunk_overlap: int = 200
     top_k: int = 5  # default number of chunks to retrieve per search
-    web_cache_enabled: bool = True  # save web_search/web_fetch results to _cache_web, cleared weekly
+    web_cache_enabled: bool = True  # save web_search/web_fetch results to 短期/_cache_web, cleared weekly
+    short_term_retention_days: int = 7  # 短期知识保留天数，超期自动清理
 
 
 class ToolsConfig(BaseModel):

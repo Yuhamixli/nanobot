@@ -166,14 +166,21 @@ This file stores important information that should persist across sessions.
 """)
         console.print("  [dim]Created memory/MEMORY.md[/dim]")
 
-    # Create knowledge directory for RAG (place policy/docs here, then run nanobot knowledge ingest)
+    # Create knowledge directory for RAG
+    from nanobot.agent.knowledge.store import LONG_TERM_DIR, SHORT_TERM_DIR
     knowledge_dir = workspace / "knowledge"
     knowledge_dir.mkdir(exist_ok=True)
+    (knowledge_dir / LONG_TERM_DIR).mkdir(exist_ok=True)
+    (knowledge_dir / SHORT_TERM_DIR).mkdir(exist_ok=True)
     knowledge_readme = knowledge_dir / "README.md"
     if not knowledge_readme.exists():
         knowledge_readme.write_text("""# Knowledge Base 知识库
 
 将制度、规范、政策等文档放在此目录下，支持格式：TXT、MD、PDF、Word(.docx)、Excel(.xlsx)。
+
+目录说明：
+- 长期/：制度、手册、政策等，不自动清理
+- 短期/：爬取内容、临时资料，按配置 TTL 定期清理（默认 7 天）
 
 导入到知识库：
 - 命令行：`nanobot knowledge ingest`
@@ -274,8 +281,8 @@ def gateway(
         return await agent.process_direct(prompt, session_key="heartbeat")
 
     async def on_heartbeat_interval() -> None:
-        """Periodic maintenance (e.g. weekly web cache cleanup)."""
-        if not config.tools.knowledge.enabled or not config.tools.knowledge.web_cache_enabled:
+        """Periodic maintenance: web cache cleanup, 短期知识清理."""
+        if not config.tools.knowledge.enabled:
             return
         from nanobot.agent.knowledge.store import get_store
         store = get_store(
@@ -283,9 +290,16 @@ def gateway(
             chunk_size=config.tools.knowledge.chunk_size,
             chunk_overlap=config.tools.knowledge.chunk_overlap,
         )
-        if store and store.should_clear_web_cache():
+        if not store:
+            return
+        if config.tools.knowledge.web_cache_enabled and store.should_clear_web_cache():
             store.clear_web_cache()
             logger.info("Web cache cleared (weekly cleanup)")
+        # 短期知识：按 TTL 清理超期文件
+        retention = getattr(config.tools.knowledge, "short_term_retention_days", 7)
+        n = store.cleanup_short_term(retention_days=retention)
+        if n > 0:
+            logger.info("短期知识已清理 %d 个超期文件", n)
 
     heartbeat = HeartbeatService(
         workspace=config.workspace_path,
@@ -680,14 +694,17 @@ def knowledge_ingest_cmd(
     resolved = (workspace / path).resolve()
     if not resolved.exists():
         if path.strip() in ("knowledge", "knowledge/"):
+            from nanobot.agent.knowledge.store import LONG_TERM_DIR, SHORT_TERM_DIR
             resolved.mkdir(parents=True, exist_ok=True)
+            (resolved / LONG_TERM_DIR).mkdir(exist_ok=True)
+            (resolved / SHORT_TERM_DIR).mkdir(exist_ok=True)
             readme = resolved / "README.md"
             if not readme.exists():
                 readme.write_text(
-                    "# 知识库\n将制度/政策文档放于此目录，支持 TXT、MD、PDF、Word、Excel。\n然后执行: nanobot knowledge ingest\n",
+                    "# 知识库\n长期/：制度、手册；短期/：临时资料（按 TTL 清理）。\n支持 TXT、MD、PDF、Word、Excel。\n然后执行: nanobot knowledge ingest\n",
                     encoding="utf-8",
                 )
-            console.print(f"[green]{_check()}[/green] 已创建知识库目录，请将文档放入后重新执行 ingest。")
+            console.print(f"[green]{_check()}[/green] 已创建知识库目录（含 长期/、短期/），请将文档放入后重新执行 ingest。")
             console.print(f"路径: [cyan]{resolved}[/cyan]")
             raise typer.Exit(0)
         console.print(f"[red]Path not found: {resolved}[/red]")
@@ -708,7 +725,7 @@ def knowledge_ingest_cmd(
 
 @knowledge_app.command("clear-web-cache")
 def knowledge_clear_web_cache_cmd():
-    """Clear web search cache (_cache_web). Normally auto-cleared weekly."""
+    """Clear web search cache (短期/_cache_web). Normally auto-cleared weekly."""
     from nanobot.config.loader import load_config
     from nanobot.agent.knowledge.store import get_store
 

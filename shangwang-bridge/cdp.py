@@ -198,7 +198,8 @@ _HOOK_SCRIPT = r"""
                 // Broader fallback: mutation has 'Msg' in name AND payload looks like a message
                 if (!isNewMsg && (type.indexOf('Msg') >= 0 || type.indexOf('msg') >= 0)) {
                     var p = mutation.payload;
-                    if (p && typeof p === 'object' && (p.text || p.from || p.fromNick) && p.time) {
+                    var m = (p && p.msg) || p;
+                    if (m && typeof m === 'object' && (m.text || (m.file && m.file.url) || m.from || m.fromNick) && m.time) {
                         isNewMsg = true;
                     }
                 }
@@ -214,12 +215,15 @@ _HOOK_SCRIPT = r"""
                 msgs.forEach(function(msg) {
                     if (!msg || typeof msg !== 'object') return;
 
-                    // Must have actual text content
                     var text = msg.text || '';
-                    if (!text || typeof text !== 'string' || text.length < 1) return;
+                    var msgType = msg.type || 'text';
+                    var file = msg.file || msg.attach || {};
 
-                    // Skip JSON-only payloads (system data, not chat messages)
-                    if (text.charAt(0) === '{' || text.charAt(0) === '[') return;
+                    // Accept: (1) text message with content, or (2) image/file message with file.url
+                    var hasText = text && typeof text === 'string' && text.length >= 1 && text.charAt(0) !== '{' && text.charAt(0) !== '[';
+                    var hasFile = file && file.url;
+
+                    if (!hasText && !hasFile) return;
 
                     var from = msg.from || msg.fromAccount || msg.account || '';
                     var sessionId = msg.sessionId || msg.to || '';
@@ -236,19 +240,27 @@ _HOOK_SCRIPT = r"""
                     // Must have a valid session (p2p or team)
                     if (!sessionId || sessionId.indexOf('p2p') < 0 && sessionId.indexOf('team') < 0) return;
 
-                    pushMsg({
+                    var payload = {
                         type: 'msg',
                         source: 'vuex',
                         mutationType: type,
                         sessionId: sessionId,
                         from: from,
                         fromNick: msg.fromNick || msg.nick || '',
-                        text: text,
-                        msgType: msg.type || 'text',
+                        text: hasText ? text : (msgType === 'image' ? '[图片]' : '[文件]'),
+                        msgType: msgType,
                         time: msgTime || Date.now(),
                         idClient: idClient,
                         flow: msg.flow || ''
-                    });
+                    };
+                    if (hasFile) {
+                        payload.fileUrl = file.url;
+                        payload.fileName = file.name || file.fileName || '';
+                        payload.fileExt = (file.ext || '').toLowerCase() || (file.name ? file.name.split('.').pop() : '');
+                        if (msgType === 'image' && !payload.fileExt) payload.fileExt = 'jpg';
+                        if (msgType === 'file' && !payload.fileExt && payload.fileName) payload.fileExt = payload.fileName.split('.').pop() || '';
+                    }
+                    pushMsg(payload);
                 });
             } catch(e) {}
         });

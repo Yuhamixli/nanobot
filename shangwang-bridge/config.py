@@ -7,6 +7,7 @@ from pathlib import Path
 
 def load_config() -> dict:
     root = Path(__file__).resolve().parent
+    nanobot_data = Path.home() / ".nanobot"
     cfg: dict = {
         # WebSocket server (bridge ↔ nanobot)
         "ws_host": os.environ.get("SHANGWANG_WS_HOST", "0.0.0.0"),
@@ -16,6 +17,8 @@ def load_config() -> dict:
         "cdp_port": int(os.environ.get("SHANGWANG_CDP_PORT", "9222")),
         # Polling
         "poll_interval_sec": float(os.environ.get("SHANGWANG_POLL_INTERVAL", "3")),
+        # File download (NIM NOS)
+        "files_dir": os.environ.get("SHANGWANG_FILES_DIR", str(nanobot_data / "shangwang-files")),
     }
     config_file = root / "config.json"
     if config_file.exists():

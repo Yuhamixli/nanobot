@@ -3,6 +3,8 @@
 import asyncio
 import json
 import re
+import shutil
+import time
 from pathlib import Path
 
 from loguru import logger
@@ -11,6 +13,10 @@ from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.config.schema import ShangwangConfig
+
+# 知识库支持的文档格式，自动保存到 workspace/knowledge/长期/来自商网
+_KNOWLEDGE_EXTS = {".pdf", ".docx", ".xlsx", ".txt", ".md"}
+_LONG_TERM_DIR = "长期"
 
 
 def _markdown_to_plain_text(text: str) -> str:
@@ -53,6 +59,7 @@ class ShangwangChannel(BaseChannel):
     ):
         super().__init__(config, bus)
         self.config: ShangwangConfig = config
+        self._workspace = Path(workspace).expanduser() if workspace else None
         self._ws = None
         self._connected = False
         self._recorder = None
@@ -107,6 +114,44 @@ class ShangwangChannel(BaseChannel):
         if self._ws:
             await self._ws.close()
             self._ws = None
+
+    def _save_docs_to_knowledge(self, raw_media: list[str], content: str) -> list[str]:
+        """
+        将对话中的文档自动复制到 workspace/knowledge/长期/来自商网/。
+        返回供 agent 使用的路径列表：文档用 knowledge 路径，图片保留原路径。
+        """
+        if not raw_media or not self._workspace:
+            return list(raw_media)
+
+        knowledge_dir = self._workspace / "knowledge" / _LONG_TERM_DIR / "来自商网"
+        knowledge_dir.mkdir(parents=True, exist_ok=True)
+        result = []
+
+        for path_str in raw_media:
+            p = Path(path_str)
+            if not p.is_file():
+                result.append(path_str)
+                continue
+
+            ext = p.suffix.lower()
+            if ext in _KNOWLEDGE_EXTS:
+                # 文档：复制到 knowledge，避免重名加时间戳
+                safe_name = re.sub(r'[<>:"/\\|?*]', "_", p.name)[:100] or f"doc{ext}"
+                dest = knowledge_dir / safe_name
+                if dest.exists():
+                    dest = knowledge_dir / f"{p.stem[:50]}_{int(time.time())}{ext}"
+                try:
+                    shutil.copy2(p, dest)
+                    result.append(str(dest))
+                    logger.info("商网文档已自动保存到知识库: %s", dest.name)
+                except OSError as e:
+                    logger.warning("复制文档到知识库失败: %s", e)
+                    result.append(path_str)
+            else:
+                # 图片等：保留原路径供 agent 使用
+                result.append(path_str)
+
+        return result
 
     def _is_mentioned(self, content: str) -> bool:
         """检查消息是否 @提及 了任一配置的昵称。支持 @程昱涵、@ 程昱涵 等格式。"""
@@ -177,17 +222,27 @@ class ShangwangChannel(BaseChannel):
                     logger.debug("群聊消息未 @提及 配置昵称，跳过: %s", content[:50])
                     return
 
-            # 私聊：过短消息（如「好的」「1」、emoji）不回复
-            if not is_group and self.config.skip_short_replies:
+            # 私聊：过短消息（如「好的」「1」、emoji）不回复（有文件附件时不过滤）
+            raw_media = data.get("media", []) or []
+            if not is_group and self.config.skip_short_replies and not raw_media:
                 stripped = content.strip()
                 if len(stripped) <= self.config.short_reply_max_length:
                     logger.debug("私聊消息过短，跳过: %s", repr(stripped[:20]))
                     return
 
+            # 自动保存文档到 workspace/knowledge/来自商网，并传递最终路径给 agent
+            media_paths = self._save_docs_to_knowledge(raw_media, content)
+
+            # 将附件路径附加到 content，便于 agent 识别并执行 knowledge_ingest
+            if media_paths:
+                paths_desc = "\n".join(f"[附件: {p}]" for p in media_paths)
+                content = f"{content}\n\n{paths_desc}" if content.strip() else paths_desc
+
             await self._handle_message(
                 sender_id=sender,
                 chat_id=chat_id,
                 content=content,
+                media=media_paths,
                 metadata={"timestamp": data.get("timestamp"), "is_group": is_group},
             )
         elif msg_type == "status":

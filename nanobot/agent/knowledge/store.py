@@ -16,8 +16,11 @@ if "HF_ENDPOINT" not in os.environ:
 CHARS_PER_TOKEN = 2
 COLLECTION_NAME = "nanobot_kb"
 WEB_CACHE_COLLECTION = "nanobot_kb_web_cache"
-WEB_CACHE_DIR = "_cache_web"
+# 短期知识目录：爬取内容、web cache，按 TTL 定期清理
+SHORT_TERM_DIR = "短期"
+WEB_CACHE_DIR = f"{SHORT_TERM_DIR}/_cache_web"  # web 缓存置于短期下
 CLEANUP_INTERVAL_DAYS = 7
+LONG_TERM_DIR = "长期"  # 长期知识：制度、手册，不自动清理
 SUPPORTED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".xlsx"}
 
 
@@ -301,6 +304,14 @@ class KnowledgeStore:
                     f.unlink()
                 except OSError:
                     pass
+        # 兼容旧版：若存在 knowledge/_cache_web，一并清理
+        legacy_cache = self.workspace / "knowledge" / "_cache_web"
+        if legacy_cache.exists():
+            for f in legacy_cache.glob("*.md"):
+                try:
+                    f.unlink()
+                except OSError:
+                    pass
         try:
             client = self._get_client()
             client.delete_collection(WEB_CACHE_COLLECTION)
@@ -322,6 +333,48 @@ class KnowledgeStore:
             return (time.time() - last) >= CLEANUP_INTERVAL_DAYS * 86400
         except Exception:
             return True
+
+    def cleanup_short_term(self, retention_days: int = 7) -> int:
+        """
+        清理 短期/ 目录下超期文件及其向量。
+        排除 _cache_web（由 clear_web_cache 单独处理）。
+        返回删除的文件数。
+        """
+        short_dir = self.workspace / "knowledge" / SHORT_TERM_DIR
+        if not short_dir.exists():
+            return 0
+        cutoff = time.time() - retention_days * 86400
+        deleted = 0
+        try:
+            coll = self._get_collection()
+            for fp in short_dir.rglob("*"):
+                if not fp.is_file():
+                    continue
+                # 跳过 _cache_web（由 clear_web_cache 处理）
+                try:
+                    rel = fp.relative_to(short_dir)
+                    if str(rel).startswith("_cache_web"):
+                        continue
+                except ValueError:
+                    continue
+                if fp.stat().st_mtime >= cutoff:
+                    continue
+                source_key = f"{SHORT_TERM_DIR}/{rel!s}".replace("\\", "/")
+                try:
+                    data = coll.get(where={"source": source_key}, include=[])
+                    ids = data.get("ids", [[]])
+                    if ids and ids[0]:
+                        coll.delete(ids=ids[0])
+                        deleted += 1
+                except Exception:
+                    pass
+                try:
+                    fp.unlink()
+                except OSError:
+                    pass
+        except Exception:
+            pass
+        return deleted
 
     def search(self, query: str, top_k: int | None = None) -> list[dict[str, Any]]:
         """Return top-k most relevant chunks with content and source. Merges main KB and web cache."""

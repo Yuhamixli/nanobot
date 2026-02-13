@@ -4,8 +4,11 @@ import asyncio
 import collections
 import json
 import logging
+import re
 import time
+from pathlib import Path
 
+import aiohttp
 import websockets
 
 from config import load_config
@@ -30,6 +33,32 @@ _my_account_id: str | None = None
 # Dedup: track recently forwarded messages (text+session → timestamp)
 _recent_forwarded: dict[str, float] = {}
 _DEDUP_WINDOW_SEC = 5.0  # ignore same text in same session within 5s
+
+
+def _safe_filename(name: str) -> str:
+    """Remove invalid chars for filesystem."""
+    return re.sub(r'[<>:"/\\|?*]', "_", name)[:120]
+
+
+async def _download_file(url: str, dest_dir: Path, base_name: str, ext: str) -> Path | None:
+    """Download file from NIM NOS URL to local path. Returns path or None on failure."""
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    safe_ext = ext.lstrip(".") if ext else "bin"
+    if not safe_ext or safe_ext == "bin":
+        safe_ext = "dat"
+    path = dest_dir / f"{base_name}.{safe_ext}"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=60)) as resp:
+                if resp.status != 200:
+                    logger.warning("下载文件失败 HTTP %s: %s", resp.status, url[:80])
+                    return None
+                path.write_bytes(await resp.read())
+        logger.info("已下载文件: %s", path.name)
+        return path
+    except Exception as e:
+        logger.warning("下载文件失败: %s", e)
+        return None
 
 
 async def _connect_cdp() -> bool:
@@ -115,6 +144,9 @@ async def _poll_messages():
                 from_id = msg.get("from", "")
                 from_nick = msg.get("fromNick") or from_id or "unknown"
                 session_id = msg.get("sessionId", "unknown")
+                file_url = msg.get("fileUrl", "")
+                file_name = msg.get("fileName", "")
+                file_ext = msg.get("fileExt", "")
 
                 # --- Echo prevention ---
                 # Skip messages with flow='out' (sent by ourselves via NIM SDK)
@@ -132,12 +164,14 @@ async def _poll_messages():
                     logger.debug("跳过回显消息: %s", text[:30])
                     continue
 
-                # Skip empty messages
+                # Allow file-only messages (text may be "[图片]" or "[文件]")
                 if not text or not text.strip():
-                    continue
+                    if not file_url:
+                        continue
+                    text = "[文件]" if msg.get("msgType") == "file" else "[图片]"
 
                 # Dedup: skip if same text+session was forwarded recently
-                dedup_key = f"{session_id}:{text.strip()[:100]}"
+                dedup_key = f"{session_id}:{text.strip()[:100]}" if not file_url else f"{session_id}:{msg.get('idClient','')}:{file_url[:80]}"
                 now = time.time()
                 last_time = _recent_forwarded.get(dedup_key, 0)
                 if now - last_time < _DEDUP_WINDOW_SEC:
@@ -147,26 +181,38 @@ async def _poll_messages():
 
                 # Cleanup old dedup entries
                 if len(_recent_forwarded) > 200:
-                    cutoff = now - _DEDUP_WINDOW_SEC * 2
                     _recent_forwarded.clear()
+
+                # Download file if present
+                media_paths = []
+                if file_url:
+                    files_dir = Path(_config.get("files_dir", str(Path.home() / ".nanobot" / "shangwang-files")))
+                    base_name = _safe_filename(f"{session_id}_{msg.get('idClient', '')}"[:80] or "file")
+                    ext = file_ext or (file_name.split(".")[-1] if file_name else "")
+                    local_path = await _download_file(file_url, files_dir, base_name, ext)
+                    if local_path:
+                        media_paths.append(str(local_path))
 
                 is_group = "team" in session_id
                 payload = {
                     "type": "message",
                     "sender": from_nick,
-                    "sender_id": from_id,  # 账号 ID，用于 chat_history 区分 admin
+                    "sender_id": from_id,
                     "chat_id": session_id,
                     "content": text,
                     "msg_type": msg.get("msgType", "text"),
                     "timestamp": msg.get("time", time.time()),
                     "is_group": is_group,
                 }
+                if media_paths:
+                    payload["media"] = media_paths
                 try:
                     await _client.send(json.dumps(payload, ensure_ascii=False))
-                    logger.info("→ nanobot: [%s] %s: %s",
+                    logger.info("→ nanobot: [%s] %s: %s%s",
                                 session_id[:20],
                                 from_nick[:15],
-                                text[:50])
+                                text[:50],
+                                " (+文件)" if media_paths else "")
                 except Exception as e:
                     logger.warning("推送消息失败: %s", e)
 
