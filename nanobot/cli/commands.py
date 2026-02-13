@@ -839,7 +839,8 @@ def chat_history_fetch_chat_cmd(
                         return
         except Exception as e:
             console.print(f"[red]连接 bridge 失败: {e}[/red]")
-            console.print("[dim]请确认 shangwang-bridge 已启动，且已在商网中打开目标群聊[/dim]")
+            console.print(f"[dim]Bridge URL: {sw.bridge_url}[/dim]")
+            console.print("[dim]请确认: 1) shangwang-bridge 已启动  2) config 中 bridgeUrl 正确  3) 商网中已打开目标群聊[/dim]")
 
     asyncio.run(_run())
 
