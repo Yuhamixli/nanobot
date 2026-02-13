@@ -83,7 +83,7 @@ nanobot chat-history export-ingest   # 导出并 ingest 到知识库
 
 - `chunkSize`：分块大小（约 token 数，默认 512）
 - `chunkOverlap`：块重叠（默认 200）
-- `topK`：检索返回条数（默认 5）
+- `topK`：检索返回条数（默认 5；业务类问题可调高至 8~10 以提升召回）
 - `webCacheEnabled`：网络搜索缓存（默认 true）
 - `shortTermRetentionDays`：短期知识保留天数（默认 7）
 - `enabled`：设为 `false` 可关闭知识库工具

@@ -39,8 +39,8 @@ class KnowledgeSearchTool(Tool):
     name = "knowledge_search"
     description = (
         "Search the local knowledge base (RAG) for relevant policy/document content. "
-        "Use this when the user asks about company policies, regulations, or documents that have been imported. "
-        "Returns matching text chunks with source file names."
+        "**Must use** when the user asks about 付款、结算、审批、资金头寸、大额支付、制度、流程、预算、账户 等业务或政策问题. "
+        "Returns matching chunks with source file names. Use top_k=8~10 for better recall on business questions."
     )
     parameters = {
         "type": "object",
@@ -59,7 +59,7 @@ class KnowledgeSearchTool(Tool):
     def __init__(
         self,
         workspace: Path,
-        top_k: int = 5,
+        top_k: int = 7,
     ):
         self.workspace = Path(workspace)
         self.top_k = top_k

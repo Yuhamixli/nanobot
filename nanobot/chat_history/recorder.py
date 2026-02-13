@@ -319,14 +319,28 @@ class ChatHistoryRecorder:
                     "chat_id": a.get("chat_id", cid),
                     "ts": b.get("ts", 0),
                 })
+            # 备用：仅有 admin 消息时（如私聊只采集到对方），导出为「管理员回复示例」
+            if not pairs:
+                for r in rows:
+                    if r.get("role") != ROLE_ADMIN:
+                        continue
+                    content = (r.get("content") or "").strip()
+                    if len(content) >= min_content_len:
+                        pairs.append({
+                            "question": "",
+                            "reply": content,
+                            "chat_id": cid,
+                            "ts": r.get("ts", 0),
+                        })
         if not pairs:
             return []
-        # Write to markdown for knowledge ingest
+        has_questions = any(p.get("question") for p in pairs)
         out_path = out_dir / "商网_客户问题与管理员回复.md"
         lines = [
             "# 商网群聊 客户问题与管理员回复示例",
             "",
             "以下为从群聊历史中提取的客户问题及管理员回复，供 agent 模仿回复口吻。",
+            "" if has_questions else "（仅采集到管理员回复，无客户问题上下文）",
             "",
             "---",
             "",
@@ -334,8 +348,9 @@ class ChatHistoryRecorder:
         for i, p in enumerate(pairs[:200], 1):  # Limit 200 pairs
             lines.append(f"## 示例 {i} (来源: {p['chat_id']})")
             lines.append("")
-            lines.append(f"**客户**: {p['question']}")
-            lines.append("")
+            if p.get("question"):
+                lines.append(f"**客户**: {p['question']}")
+                lines.append("")
             lines.append(f"**管理员**: {p['reply']}")
             lines.append("")
             lines.append("---")
