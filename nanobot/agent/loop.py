@@ -18,7 +18,7 @@ from nanobot.agent.tools.web import WebSearchTool, WebFetchTool
 from nanobot.agent.tools.browser import BrowserAutomationTool
 from nanobot.agent.tools.message import MessageTool
 from nanobot.agent.tools.spawn import SpawnTool
-from nanobot.agent.tools.knowledge import KnowledgeSearchTool, KnowledgeIngestTool
+from nanobot.agent.tools.knowledge import KnowledgeSearchTool, KnowledgeIngestTool, KnowledgeListTool
 from nanobot.agent.knowledge.store import get_store
 from nanobot.agent.subagent import SubagentManager
 from nanobot.session.manager import SessionManager
@@ -143,6 +143,7 @@ class AgentLoop:
                 workspace=self.workspace,
                 top_k=self.knowledge_config.top_k,
             ))
+            self.tools.register(KnowledgeListTool(workspace=self.workspace))
             self.tools.register(KnowledgeIngestTool(
                 workspace=self.workspace,
                 chunk_size=self.knowledge_config.chunk_size,

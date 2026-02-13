@@ -20,7 +20,7 @@
    - **命令行**：在项目根目录执行  
      `nanobot knowledge ingest`  
      （默认导入 `knowledge` 目录；也可指定路径，如 `nanobot knowledge ingest knowledge/制度`）
-   - **商网/对话**：直接对 agent 说「把 knowledge 目录导入知识库」或「导入知识库」，agent 会调用 `knowledge_ingest` 工具。
+   - **商网/对话**：直接对 agent 说「把 knowledge 目录导入知识库」「导入知识库」或「这个也放你的库里」，agent 会调用 `knowledge_ingest` 工具。若文件已在 knowledge 目录，agent 会先执行导入再确认「已导入」。
 3. **提问**：在商网或任意通道向 agent 提问，例如「差旅报销标准是什么？」。Agent 会先调用 `knowledge_search` 检索知识库，再根据检索结果回答。
 
 ## 首次使用前
@@ -28,6 +28,29 @@
 - 安装 RAG 依赖：`pip install nanobot-ai[rag]`（或从源码 `pip install -e ".[rag]"`）
 - 若未运行过 `nanobot onboard`，请先运行一次以创建 workspace 和本目录。
 - **首次 ingest 会下载 BGE 中文向量模型**（约数百 MB）。程序已默认使用国内镜像，若仍超时请检查网络；国外用户可设 `HF_ENDPOINT=https://huggingface.co`。
+
+## 商网群聊历史 → 学习管理员回复口吻
+
+当商网 channel 启用且配置了 `adminNames` / `adminIds` 时，群聊消息会自动记录到 `workspace/chat_history/shangwang/`。
+
+**导出与导入**：
+```bash
+nanobot chat-history list            # 查看已记录的会话 ID（team-xxx 等）
+nanobot chat-history diagnose        # 诊断为何无法导出（检查 admin 配置）
+nanobot chat-history export          # 导出全部
+nanobot chat-history export --chat-id team-xxx   # 只导出指定群
+nanobot chat-history export-ingest   # 导出并 ingest 到知识库
+```
+导出结果会标注每条示例的来源群（chat_id）。若 export 无结果，运行 `diagnose` 查看 admin 消息数及配置。
+
+**配置**：在 `~/.nanobot/config.json` 的 `channels.shangwang` 中：
+- `chatHistoryEnabled`: true（默认）
+- `adminNames`: ["张三", "李四"]  # 管理员昵称
+- `adminIds`: ["accid1"]  # 或管理员账号 ID（二选一或同时配置）
+
+**查询 ID**：`nanobot channels shangwang my-id` 查自己的 ID；`nanobot channels shangwang current-session` 查当前聊天窗口的对方 ID（私聊时）。
+
+导出后的 markdown 会以「客户」「管理员」格式组织，agent 检索时会参考这些示例的回复口吻。
 
 ## 网络搜索结果缓存（Web Cache）
 

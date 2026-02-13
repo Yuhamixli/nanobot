@@ -72,7 +72,9 @@ class ChannelManager:
             try:
                 from nanobot.channels.shangwang import ShangwangChannel
                 self.channels["shangwang"] = ShangwangChannel(
-                    self.config.channels.shangwang, self.bus
+                    self.config.channels.shangwang,
+                    self.bus,
+                    workspace=self.config.workspace_path,
                 )
                 logger.info("商网 channel enabled")
             except ImportError as e:

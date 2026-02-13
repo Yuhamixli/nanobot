@@ -154,6 +154,7 @@ async def _poll_messages():
                 payload = {
                     "type": "message",
                     "sender": from_nick,
+                    "sender_id": from_id,  # 账号 ID，用于 chat_history 区分 admin
                     "chat_id": session_id,
                     "content": text,
                     "msg_type": msg.get("msgType", "text"),
@@ -219,6 +220,31 @@ async def _handle_message(ws: websockets.WebSocketServerProtocol, raw: str) -> N
     elif msg_type == "ping":
         await ws.send(json.dumps({"type": "status", "status": "pong"}))
 
+    elif msg_type == "my_id":
+        await ws.send(json.dumps({
+            "type": "my_id",
+            "account": _my_account_id or "",
+        }))
+
+    elif msg_type == "current_session":
+        if not await _ensure_cdp():
+            await ws.send(json.dumps({"type": "error", "error": "CDP 未连接"}))
+        else:
+            info = await _cdp.get_session_info()
+            curr = info.get("currSession", "")
+            other_party_id = ""
+            if curr.startswith("p2p-"):
+                other_party_id = curr[4:]
+            elif curr.startswith("team-"):
+                other_party_id = curr[5:]
+            await ws.send(json.dumps({
+                "type": "current_session",
+                "currSession": curr,
+                "otherPartyId": other_party_id,
+                "myAccount": _my_account_id or "",
+                "sessions": info.get("sessions", []),
+            }, ensure_ascii=False))
+
     elif msg_type == "rehook":
         # Force re-inject hook
         if _cdp and _cdp.connected:
@@ -232,8 +258,10 @@ async def _handle_message(ws: websockets.WebSocketServerProtocol, raw: str) -> N
 async def _handler(ws: websockets.WebSocketServerProtocol) -> None:
     """Handle avic shangwang bridge client WebSocket connection."""
     global _client
-    _client = ws
-    logger.info("✓ AVIC shangwang bridge client connected")
+    is_primary = _client is None
+    if is_primary:
+        _client = ws
+    logger.info("✓ AVIC shangwang bridge client connected" + (" (primary)" if is_primary else " (query)"))
 
     # Try CDP connection
     cdp_ok = await _connect_cdp()
@@ -250,8 +278,11 @@ async def _handler(ws: websockets.WebSocketServerProtocol) -> None:
     except websockets.ConnectionClosed:
         pass
     finally:
-        _client = None
-        logger.info("✗ avic shangwang bridge client disconnected")
+        if _client is ws:
+            _client = None
+            logger.info("✗ primary client disconnected (gateway 已断开，将停止推送消息)")
+        else:
+            logger.info("✗ query client disconnected (查询命令结束，gateway 保持连接)")
 
 
 async def serve() -> None:

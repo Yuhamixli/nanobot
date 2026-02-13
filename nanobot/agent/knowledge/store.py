@@ -385,3 +385,26 @@ class KnowledgeStore:
             return n
         except Exception:
             return 0
+
+    def list_sources(self) -> list[str]:
+        """Return unique source file names in the knowledge base (main + web cache)."""
+        sources: set[str] = set()
+        try:
+            coll = self._get_collection()
+            n = coll.count()
+            if n > 0:
+                # Limit to avoid loading huge collections; 5k chunks ~= hundreds of files
+                data = coll.get(include=["metadatas"], limit=min(n, 5000))
+                for m in (data.get("metadatas") or []):
+                    if m and isinstance(m, dict) and "source" in m:
+                        sources.add(str(m["source"]))
+            wc = self._get_web_cache_collection()
+            n_wc = wc.count()
+            if n_wc > 0:
+                data = wc.get(include=["metadatas"], limit=min(n_wc, 2000))
+                for m in (data.get("metadatas") or []):
+                    if m and isinstance(m, dict) and "source" in m:
+                        sources.add(str(m["source"]))
+        except Exception:
+            pass
+        return sorted(sources)

@@ -107,13 +107,44 @@ class KnowledgeSearchTool(Tool):
             return f"Error searching knowledge base: {e}"
 
 
+class KnowledgeListTool(Tool):
+    """List source files currently in the knowledge base."""
+
+    name = "knowledge_list"
+    description = (
+        "List all source files (documents) currently in the knowledge base. "
+        "Use this to verify whether a document has already been ingested before replying '未检索到' or '请导入'. "
+        "If the relevant file appears in the list, the document is already in the KB—suggest trying a different search query instead of asking the user to import."
+    )
+    parameters = {
+        "type": "object",
+        "properties": {},
+        "required": [],
+    }
+
+    def __init__(self, workspace: Path):
+        self.workspace = Path(workspace)
+        self._store = get_store(self.workspace)
+
+    async def execute(self, **kwargs: Any) -> str:
+        if self._store is None:
+            return f"Error: {RAG_INSTALL_HINT}"
+        try:
+            sources = self._store.list_sources()
+            if not sources:
+                return "知识库为空，尚无已导入的文档。"
+            return "知识库中已导入的文档来源：\n" + "\n".join(f"- {s}" for s in sources)
+        except Exception as e:
+            return f"Error listing knowledge base: {e}"
+
+
 class KnowledgeIngestTool(Tool):
     """Import documents from a file or directory into the local knowledge base."""
 
     name = "knowledge_ingest"
     description = (
         "Import documents (PDF, Word, Excel, TXT, MD) from a path into the local knowledge base. "
-        "Use a file path or the workspace 'knowledge' folder (where users place policy files). "
+        "When user says '放库里'/'导入知识库'/'这个也放你的库里', run this first with path='knowledge' to import any new files in workspace/knowledge. "
         "After ingest, use knowledge_search to query this content."
     )
     parameters = {

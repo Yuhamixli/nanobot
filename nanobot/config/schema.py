@@ -41,6 +41,10 @@ class ShangwangConfig(BaseModel):
     # 私聊中过短消息（如「好的」「1」、emoji）不回复，≤N 字符则跳过
     skip_short_replies: bool = True
     short_reply_max_length: int = 2
+    # 聊天历史记录：用于学习管理员回复口吻，区分客户 vs 管理员
+    chat_history_enabled: bool = True
+    admin_names: list[str] = Field(default_factory=list)  # 管理员昵称
+    admin_ids: list[str] = Field(default_factory=list)  # 管理员账号 ID（二选一或同时配置）
 
 
 class ChannelsConfig(BaseModel):

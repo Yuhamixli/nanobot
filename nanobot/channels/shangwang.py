@@ -3,6 +3,7 @@
 import asyncio
 import json
 import re
+from pathlib import Path
 
 from loguru import logger
 
@@ -44,11 +45,28 @@ class ShangwangChannel(BaseChannel):
 
     name = "shangwang"
 
-    def __init__(self, config: ShangwangConfig, bus: MessageBus):
+    def __init__(
+        self,
+        config: ShangwangConfig,
+        bus: MessageBus,
+        workspace: Path | None = None,
+    ):
         super().__init__(config, bus)
         self.config: ShangwangConfig = config
         self._ws = None
         self._connected = False
+        self._recorder = None
+        if (
+            workspace
+            and config.chat_history_enabled
+            and (config.admin_names or config.admin_ids)
+        ):
+            from nanobot.chat_history.recorder import ChatHistoryRecorder
+            self._recorder = ChatHistoryRecorder(
+                workspace=workspace,
+                admin_names=config.admin_names,
+                admin_ids=config.admin_ids,
+            )
 
     async def start(self) -> None:
         """Connect to shangwang-bridge and listen."""
@@ -134,9 +152,21 @@ class ShangwangChannel(BaseChannel):
 
         if msg_type == "message":
             sender = data.get("sender", "shangwang")
+            sender_id = data.get("sender_id", "")
             chat_id = data.get("chat_id", "current")
             content = data.get("content", "")
             is_group = data.get("is_group", False)
+
+            if self._recorder:
+                self._recorder.record(
+                    channel=self.name,
+                    chat_id=chat_id,
+                    sender=sender,
+                    content=content,
+                    sender_id=sender_id,
+                    is_group=is_group,
+                    timestamp=data.get("timestamp"),
+                )
 
             if not self.is_allowed(sender):
                 return

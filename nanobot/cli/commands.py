@@ -464,6 +464,106 @@ def channels_status():
     console.print(table)
 
 
+shangwang_app = typer.Typer(help="商网 bridge 查询（需 shangwang-bridge 已启动；若 gateway 正在运行会短暂断开）")
+channels_app.add_typer(shangwang_app, name="shangwang")
+
+
+@shangwang_app.command("my-id")
+def shangwang_my_id():
+    """查询当前登录账号 ID（即 sender_id，用于配置 adminIds）。"""
+    import asyncio
+    import json
+
+    async def _run():
+        from nanobot.config.loader import load_config
+        config = load_config()
+        url = config.channels.shangwang.bridge_url.strip()
+        if url.startswith("http://"):
+            url = "ws://" + url[7:]
+        elif url.startswith("https://"):
+            url = "wss://" + url[8:]
+        elif not url.startswith("ws"):
+            url = "ws://" + url
+        try:
+            import websockets
+            async with websockets.connect(url, close_timeout=5) as ws:
+                await ws.send(json.dumps({"type": "my_id"}))
+                for _ in range(5):
+                    msg = await asyncio.wait_for(ws.recv(), timeout=5)
+                    data = json.loads(msg)
+                    if data.get("type") == "my_id":
+                        acc = data.get("account", "")
+                        if acc:
+                            console.print(f"当前登录账号 (sender_id): [cyan]{acc}[/cyan]")
+                            console.print("[dim]可填入 config channels.shangwang.adminIds[/dim]")
+                        else:
+                            console.print("[yellow]未获取到账号，请确认已登录商网并打开聊天界面[/yellow]")
+                        return
+                    if data.get("type") == "error":
+                        console.print(f"[red]{data.get('error', 'Unknown error')}[/red]")
+                        return
+        except Exception as e:
+            console.print(f"[red]连接 bridge 失败: {e}[/red]")
+            console.print(f"[dim]请确认 shangwang-bridge 已启动，且 config 中 bridgeUrl 正确[/dim]")
+
+    asyncio.run(_run())
+
+
+@shangwang_app.command("current-session")
+def shangwang_current_session():
+    """查询当前聊天窗口的会话信息（私聊可得到对方 ID）。"""
+    import asyncio
+    import json
+
+    async def _run():
+        from nanobot.config.loader import load_config
+        config = load_config()
+        url = config.channels.shangwang.bridge_url.strip()
+        if url.startswith("http://"):
+            url = "ws://" + url[7:]
+        elif url.startswith("https://"):
+            url = "wss://" + url[8:]
+        elif not url.startswith("ws"):
+            url = "ws://" + url
+        try:
+            import websockets
+            async with websockets.connect(url, close_timeout=5) as ws:
+                await ws.send(json.dumps({"type": "current_session"}))
+                for _ in range(10):
+                    msg = await asyncio.wait_for(ws.recv(), timeout=5)
+                    data = json.loads(msg)
+                    if data.get("type") == "current_session":
+                        curr = data.get("currSession", "")
+                        other = data.get("otherPartyId", "")
+                        my_acc = data.get("myAccount", "")
+                        sessions = data.get("sessions", [])
+                        console.print(f"我的账号: [cyan]{my_acc or '(未获取)'}[/cyan]")
+                        console.print(f"当前会话: [cyan]{curr}[/cyan]")
+                        if curr.startswith("p2p-"):
+                            console.print(f"对方 ID (私聊): [cyan]{other}[/cyan]")
+                            console.print("[dim]可填入 adminIds 或用于识别对方[/dim]")
+                        elif curr.startswith("team-"):
+                            console.print(f"群 ID: [cyan]{other}[/cyan]")
+                        if sessions:
+                            console.print("\n[dim]最近会话:[/dim]")
+                            for s in sessions[:8]:
+                                sid = s.get("id", "")
+                                name = s.get("name", "") or "(无名称)"
+                                if sid.startswith("p2p-"):
+                                    console.print(f"  私聊 {name}: {sid} → 对方ID [cyan]{sid[4:] if len(sid) > 4 else ''}[/cyan]")
+                                else:
+                                    console.print(f"  {name}: {sid}")
+                        return
+                    if data.get("type") == "error":
+                        console.print(f"[red]{data.get('error', 'Unknown error')}[/red]")
+                        return
+        except Exception as e:
+            console.print(f"[red]连接 bridge 失败: {e}[/red]")
+            console.print(f"[dim]请确认 shangwang-bridge 已启动，且 config 中 bridgeUrl 正确[/dim]")
+
+    asyncio.run(_run())
+
+
 def _get_bridge_dir() -> Path:
     """Get the bridge directory, setting it up if needed."""
     import shutil
@@ -623,6 +723,160 @@ def knowledge_clear_web_cache_cmd():
         raise typer.Exit(1)
     store.clear_web_cache()
     console.print("[green]Web cache cleared.[/green]")
+
+
+# ============================================================================
+# Chat History Commands (商网群聊历史 → 学习管理员回复口吻)
+# ============================================================================
+
+chat_history_app = typer.Typer(help="商网群聊历史：导出客户问题与管理员回复，供 agent 学习口吻")
+app.add_typer(chat_history_app, name="chat-history")
+
+
+@chat_history_app.command("list")
+def chat_history_list_cmd(
+    channel: str = typer.Option("shangwang", "--channel", "-c", help="Channel name"),
+):
+    """列出已记录的会话 ID（用于 export --chat-id 筛选）。"""
+    from nanobot.config.loader import load_config
+    from nanobot.chat_history.recorder import ChatHistoryRecorder
+
+    config = load_config()
+    workspace = config.workspace_path
+    sw = config.channels.shangwang
+    recorder = ChatHistoryRecorder(
+        workspace=workspace,
+        admin_names=sw.admin_names,
+        admin_ids=sw.admin_ids,
+    )
+    chats = recorder.list_chats(channel=channel)
+    if not chats:
+        console.print("[yellow]暂无记录。请先启动 gateway 并确保 adminNames/adminIds 已配置。[/yellow]")
+        console.print("[dim]获取 team ID：在商网中切换到目标群聊，然后运行 nanobot channels shangwang current-session[/dim]")
+        return
+    table = Table(title="已记录的会话")
+    table.add_column("chat_id", style="cyan")
+    table.add_column("类型", style="green")
+    table.add_column("消息数", justify="right")
+    for c in chats:
+        table.add_row(c["chat_id"], c["type"], str(c["msg_count"]))
+    console.print(table)
+    console.print("[dim]导出指定群: nanobot chat-history export --chat-id team-xxx[/dim]")
+
+
+@chat_history_app.command("diagnose")
+def chat_history_diagnose_cmd(
+    channel: str = typer.Option("shangwang", "--channel", "-c", help="Channel name"),
+    chat_id: str = typer.Option(None, "--chat-id", "-i", help="Diagnose specific chat"),
+):
+    """诊断为何无法导出 Q&A 对（检查 admin 配置与消息角色分布）。"""
+    from nanobot.config.loader import load_config
+    from nanobot.chat_history.recorder import ChatHistoryRecorder
+
+    config = load_config()
+    sw = config.channels.shangwang
+    recorder = ChatHistoryRecorder(
+        workspace=config.workspace_path,
+        admin_names=sw.admin_names,
+        admin_ids=sw.admin_ids,
+    )
+    diag = recorder.diagnose(channel=channel, chat_id_filter=chat_id)
+    console.print("adminNames:", diag["admin_names"] or "(未配置)")
+    console.print("adminIds:", diag["admin_ids"] or "(未配置)")
+    if diag["chats"]:
+        from rich.table import Table
+        table = Table(title="会话诊断")
+        table.add_column("chat_id", style="cyan")
+        table.add_column("总消息", justify="right")
+        table.add_column("admin", justify="right")
+        table.add_column("customer", justify="right")
+        table.add_column("可提取对", justify="right")
+        for c in diag["chats"]:
+            table.add_row(c["chat_id"], str(c["total"]), str(c["admin"]), str(c["customer"]), str(c["qa_pairs"]))
+        console.print(table)
+    console.print(f"\n[cyan]{diag['hint']}[/cyan]")
+
+
+@chat_history_app.command("export")
+def chat_history_export_cmd(
+    output: str = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output directory (default: workspace/knowledge/回复示例)",
+    ),
+    channel: str = typer.Option("shangwang", "--channel", "-c", help="Channel name"),
+    chat_id: str = typer.Option(
+        None,
+        "--chat-id",
+        "-i",
+        help="Only export this chat (e.g. team-xxx). Run 'chat-history list' to see IDs.",
+    ),
+):
+    """Export Q&A pairs from chat history to markdown for knowledge ingest."""
+    from nanobot.config.loader import load_config
+    from nanobot.chat_history.recorder import ChatHistoryRecorder
+
+    config = load_config()
+    workspace = config.workspace_path
+    sw = config.channels.shangwang
+    recorder = ChatHistoryRecorder(
+        workspace=workspace,
+        admin_names=sw.admin_names,
+        admin_ids=sw.admin_ids,
+    )
+    out_path = Path(output) if output else None
+    pairs = recorder.export_qa_pairs(
+        channel=channel,
+        output_dir=out_path,
+        chat_id_filter=chat_id,
+    )
+    if pairs:
+        console.print(f"[green]{_check()}[/green] Exported {len(pairs)} Q&A pairs to knowledge/回复示例/")
+        console.print("[dim]Run: nanobot knowledge ingest knowledge/回复示例[/dim]")
+    else:
+        diag = recorder.diagnose(channel=channel, chat_id_filter=chat_id)
+        console.print("[yellow]No Q&A pairs found.[/yellow]")
+        if diag["chats"]:
+            for c in diag["chats"]:
+                console.print(f"  [dim]{c['chat_id']}: {c['total']} 条消息 (admin={c['admin']}, customer={c['customer']}, 可提取={c['qa_pairs']} 对)[/dim]")
+        console.print(f"  [cyan]{diag['hint']}[/cyan]")
+
+
+@chat_history_app.command("export-ingest")
+def chat_history_export_ingest_cmd(
+    channel: str = typer.Option("shangwang", "--channel", "-c", help="Channel name"),
+    chat_id: str = typer.Option(
+        None,
+        "--chat-id",
+        "-i",
+        help="Only export this chat (e.g. team-xxx). Run 'chat-history list' to see IDs.",
+    ),
+):
+    """Export Q&A pairs and ingest into knowledge base in one step."""
+    from nanobot.config.loader import load_config
+    from nanobot.agent.knowledge.store import get_store
+    from nanobot.chat_history.recorder import ChatHistoryRecorder
+
+    config = load_config()
+    workspace = config.workspace_path
+    sw = config.channels.shangwang
+    recorder = ChatHistoryRecorder(
+        workspace=workspace,
+        admin_names=sw.admin_names,
+        admin_ids=sw.admin_ids,
+    )
+    pairs = recorder.export_qa_pairs(channel=channel, chat_id_filter=chat_id)
+    if not pairs:
+        console.print("[yellow]No Q&A pairs found.[/yellow]")
+        raise typer.Exit(0)
+    store = get_store(workspace)
+    if store is None:
+        console.print("[red]RAG not installed. Run: pip install -e \".[rag]\"[/red]")
+        raise typer.Exit(1)
+    out_path = workspace / "knowledge" / "回复示例"
+    result = store.add_documents([out_path], skip_unsupported=True)
+    console.print(f"[green]{_check()}[/green] Exported {len(pairs)} pairs, ingested {result['added']} chunk(s).")
 
 
 @knowledge_app.command("status")

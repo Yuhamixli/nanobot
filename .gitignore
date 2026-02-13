@@ -3,6 +3,8 @@
 # 知识库目录：忽略用户放入的文档，保留 README.md
 workspace/knowledge/*
 !workspace/knowledge/README.md
+# 商网群聊历史（运行时生成）
+workspace/chat_history/
 
 *.pyc
 dist/
