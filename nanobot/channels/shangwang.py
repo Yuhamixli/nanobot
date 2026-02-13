@@ -63,11 +63,7 @@ class ShangwangChannel(BaseChannel):
         self._ws = None
         self._connected = False
         self._recorder = None
-        if (
-            workspace
-            and config.chat_history_enabled
-            and (config.admin_names or config.admin_ids)
-        ):
+        if workspace and config.chat_history_enabled:
             from nanobot.chat_history.recorder import ChatHistoryRecorder
             self._recorder = ChatHistoryRecorder(
                 workspace=workspace,
@@ -211,6 +207,7 @@ class ShangwangChannel(BaseChannel):
                     sender_id=sender_id,
                     is_group=is_group,
                     timestamp=data.get("timestamp"),
+                    id_client=data.get("id_client", ""),
                 )
 
             if not self.is_allowed(sender):

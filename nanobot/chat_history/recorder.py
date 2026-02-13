@@ -11,6 +11,7 @@ from loguru import logger
 CHAT_HISTORY_DIR = "chat_history"
 ROLE_ADMIN = "admin"
 ROLE_CUSTOMER = "customer"
+ROLE_UNKNOWN = "unknown"
 
 
 def _sanitize_filename(chat_id: str) -> str:
@@ -34,6 +35,8 @@ class ChatHistoryRecorder:
 
     def _role(self, sender: str, sender_id: str) -> str:
         """Determine role from sender nickname or ID."""
+        if not self.admin_names and not self.admin_ids:
+            return ROLE_UNKNOWN
         sn = (sender or "").strip()
         sid = (sender_id or "").strip()
         if sid and sid in self.admin_ids:
@@ -52,8 +55,9 @@ class ChatHistoryRecorder:
         sender_id: str = "",
         is_group: bool = False,
         timestamp: float | None = None,
+        id_client: str = "",
     ) -> None:
-        """Append one message to the history file."""
+        """Append one message to the history file. id_client for dedup when merging history."""
         if not content or not content.strip():
             return
         r = role if role else self._role(sender, sender_id)
@@ -70,6 +74,8 @@ class ChatHistoryRecorder:
             "chat_id": chat_id,
             "is_group": is_group,
         }
+        if id_client:
+            row["id_client"] = id_client
         try:
             with open(path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
@@ -111,6 +117,7 @@ class ChatHistoryRecorder:
                 continue
             admin_count = sum(1 for r in rows if r.get("role") == ROLE_ADMIN)
             customer_count = sum(1 for r in rows if r.get("role") == ROLE_CUSTOMER)
+            unknown_count = sum(1 for r in rows if r.get("role") == ROLE_UNKNOWN)
             pairs = 0
             for i in range(len(rows) - 1):
                 if rows[i].get("role") == ROLE_CUSTOMER and rows[i + 1].get("role") == ROLE_ADMIN:
@@ -122,13 +129,16 @@ class ChatHistoryRecorder:
                 "total": len(rows),
                 "admin": admin_count,
                 "customer": customer_count,
+                "unknown": unknown_count,
                 "qa_pairs": pairs,
             })
         if not result["admin_configured"]:
-            result["hint"] = "adminNames 或 adminIds 未配置，所有消息被标记为 customer，无法识别管理员回复。请在 config.json 的 channels.shangwang 中配置。"
+            result["hint"] = "adminNames 或 adminIds 未配置，消息被标记为 unknown。请配置后运行 nanobot chat-history re-role 重新标记，再 export。"
         elif result["chats"]:
             c = result["chats"][0]
-            if c["admin"] == 0:
+            if c.get("unknown", 0) == c["total"]:
+                result["hint"] = "所有消息为 unknown（录制时未配置 admin）。请配置 adminNames/adminIds 后运行 nanobot chat-history re-role，再 export。"
+            elif c["admin"] == 0:
                 result["hint"] = f"该会话中无管理员消息（admin=0）。请确认 adminNames/adminIds 与实际群内管理员昵称/账号一致。"
             elif c["qa_pairs"] == 0:
                 result["hint"] = f"有 {c['admin']} 条管理员消息，但无连续的「客户→管理员」对话对。可能消息顺序交错或内容过短。"
@@ -137,6 +147,110 @@ class ChatHistoryRecorder:
         elif chat_id_filter:
             result["hint"] = f"未找到 chat_id={chat_id_filter} 的记录。运行 nanobot chat-history list 查看实际 ID（需完全一致）。"
         return result
+
+    def re_role(self, channel: str = "shangwang", chat_id_filter: str | None = None) -> int:
+        """Re-process all messages with current admin config. Returns count of updated rows."""
+        src = self._base / channel
+        if not src.exists() or (not self.admin_names and not self.admin_ids):
+            return 0
+        updated = 0
+        for p in src.glob("*.jsonl"):
+            cid = p.stem
+            if chat_id_filter and cid != chat_id_filter:
+                continue
+            rows: list[dict] = []
+            try:
+                for line in p.open(encoding="utf-8"):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rows.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+            except OSError:
+                continue
+            if not rows:
+                continue
+            new_rows = []
+            for r in rows:
+                new_role = self._role(r.get("sender", ""), r.get("sender_id", ""))
+                if r.get("role") != new_role:
+                    r = dict(r)
+                    r["role"] = new_role
+                    updated += 1
+                new_rows.append(r)
+            try:
+                with open(p, "w", encoding="utf-8") as f:
+                    for r in new_rows:
+                        f.write(json.dumps(r, ensure_ascii=False) + "\n")
+            except OSError:
+                pass
+        return updated
+
+    def save_fetched_messages(
+        self,
+        channel: str,
+        chat_id: str,
+        messages: list[dict[str, Any]],
+        is_group: bool = False,
+    ) -> int:
+        """
+        Save messages from DOM/Vue fetch. Dedup by id_client or (ts, sender, content).
+        Returns count of newly added rows.
+        """
+        path = self._base / channel / f"{_sanitize_filename(chat_id)}.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        existing: set[str] = set()
+        if path.exists():
+            try:
+                for line in path.open(encoding="utf-8"):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        r = json.loads(line)
+                        ic = r.get("id_client", "")
+                        if ic:
+                            existing.add(ic)
+                        else:
+                            existing.add(f"{r.get('ts',0)}|{r.get('sender','')}|{(r.get('content','') or '')[:80]}")
+                    except json.JSONDecodeError:
+                        continue
+            except OSError:
+                pass
+        added = 0
+        for m in messages:
+            text = (m.get("text") or "").strip()
+            if not text:
+                continue
+            ic = m.get("idClient", "")
+            ts = m.get("time", 0) or 0
+            sender = m.get("fromNick", "") or m.get("from", "")
+            sender_id = m.get("from", "")
+            dedup_key = ic if ic else f"{ts}|{sender}|{text[:80]}"
+            if dedup_key in existing:
+                continue
+            existing.add(dedup_key)
+            r = self._role(sender, sender_id)
+            row = {
+                "ts": ts,
+                "sender": sender,
+                "sender_id": sender_id,
+                "content": text,
+                "role": r,
+                "chat_id": chat_id,
+                "is_group": is_group,
+            }
+            if ic:
+                row["id_client"] = ic
+            try:
+                with open(path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(row, ensure_ascii=False) + "\n")
+                added += 1
+            except OSError:
+                pass
+        return added
 
     def list_chats(self, channel: str = "shangwang") -> list[dict[str, Any]]:
         """List all chat_ids in history with message count."""

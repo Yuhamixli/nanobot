@@ -490,6 +490,68 @@ _SESSION_INFO_SCRIPT = r"""
 })()
 """
 
+# JS to fetch current chat messages from Vue store (方案四: 采集当前窗口历史)
+_FETCH_CURR_CHAT_SCRIPT = r"""
+(function() {
+    try {
+        var app = document.querySelector('#app');
+        var store = null;
+        if (app && app.__vue_app__) {
+            store = app.__vue_app__.config.globalProperties.$store;
+        } else if (app && app.__vue__ && app.__vue__.$store) {
+            store = app.__vue__.$store;
+        }
+        if (!store || !store.state) return JSON.stringify({ok: false, error: 'no store'});
+        var state = store.state;
+        var currSession = state.currSessionId || state.currentSessionId || '';
+        if (!currSession) return JSON.stringify({ok: false, error: 'no current session'});
+        var msgs = [];
+        function extractMsgs(arr) {
+            if (!Array.isArray(arr)) return;
+            for (var i = 0; i < arr.length; i++) {
+                var m = arr[i];
+                if (!m || typeof m !== 'object') continue;
+                var text = m.text || m.content || '';
+                if (m.file && m.file.url && !text) text = m.msgType === 'image' ? '[图片]' : '[文件]';
+                if (!text || typeof text !== 'string' || text.charAt(0) === '{' || text.charAt(0) === '[') continue;
+                msgs.push({
+                    from: m.from || m.fromAccount || m.account || '',
+                    fromNick: m.fromNick || m.nick || '',
+                    text: text,
+                    time: m.time || 0,
+                    idClient: m.idClient || m.id || '',
+                    sessionId: m.sessionId || m.to || currSession
+                });
+            }
+        }
+        var candidates = ['currSessionMsgs', 'sessionMsgs', 'msgList', 'currMsgs', 'messages'];
+        for (var c = 0; c < candidates.length; c++) {
+            var val = state[candidates[c]];
+            if (Array.isArray(val) && val.length > 0) {
+                msgs = [];
+                extractMsgs(val);
+                if (msgs.length > 0) break;
+            }
+            if (val && typeof val === 'object' && !Array.isArray(val)) {
+                var bySession = val[currSession] || val[currSession.replace('team-', '').replace('p2p-', '')];
+                if (Array.isArray(bySession) && bySession.length > 0) {
+                    msgs = [];
+                    extractMsgs(bySession);
+                    if (msgs.length > 0) break;
+                }
+            }
+        }
+        if (msgs.length === 0 && state.im) {
+            extractMsgs(state.im.currSessionMsgs || state.im.sessionMsgs || state.im.msgList);
+        }
+        msgs.sort(function(a,b){ return (a.time||0) - (b.time||0); });
+        return JSON.stringify({ok: true, currSession: currSession, msgs: msgs});
+    } catch(e) {
+        return JSON.stringify({ok: false, error: e.message});
+    }
+})()
+"""
+
 
 class CDPClient:
     """Async CDP client that connects to Electron's remote debugging port."""
@@ -745,4 +807,14 @@ class CDPClient:
                 return json.loads(raw)
         except Exception as e:
             logger.warning("get_session_info error: %s", e)
+        return {"ok": False, "error": "failed"}
+
+    async def fetch_current_chat(self) -> dict:
+        """Fetch messages from current chat window (Vue store, 方案四)."""
+        try:
+            raw = await self.evaluate(_FETCH_CURR_CHAT_SCRIPT)
+            if raw:
+                return json.loads(raw)
+        except Exception as e:
+            logger.warning("fetch_current_chat error: %s", e)
         return {"ok": False, "error": "failed"}

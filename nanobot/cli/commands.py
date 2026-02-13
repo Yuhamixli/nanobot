@@ -781,6 +781,89 @@ def chat_history_list_cmd(
     console.print("[dim]导出指定群: nanobot chat-history export --chat-id team-xxx[/dim]")
 
 
+@chat_history_app.command("fetch-chat")
+def chat_history_fetch_chat_cmd(
+    channel: str = typer.Option("shangwang", "--channel", "-c", help="Channel name"),
+):
+    """从当前打开的商网聊天窗口采集历史消息（方案四），去重后追加到 chat_history。需先切换到目标群聊。"""
+    import asyncio
+    import json
+
+    async def _run():
+        from nanobot.config.loader import load_config
+        from nanobot.chat_history.recorder import ChatHistoryRecorder
+
+        config = load_config()
+        workspace = config.workspace_path
+        sw = config.channels.shangwang
+        url = sw.bridge_url.strip()
+        if url.startswith("http://"):
+            url = "ws://" + url[7:]
+        elif url.startswith("https://"):
+            url = "wss://" + url[8:]
+        elif not url.startswith("ws"):
+            url = "ws://" + url
+        try:
+            import websockets
+            async with websockets.connect(url, close_timeout=5) as ws:
+                await ws.send(json.dumps({"type": "fetch_current_chat"}))
+                for _ in range(10):
+                    msg = await asyncio.wait_for(ws.recv(), timeout=10)
+                    data = json.loads(msg)
+                    if data.get("type") == "fetch_current_chat":
+                        if not data.get("ok"):
+                            console.print(f"[red]{data.get('error', 'Unknown error')}[/red]")
+                            return
+                        curr = data.get("currSession", "")
+                        msgs = data.get("msgs", [])
+                        if not msgs:
+                            console.print("[yellow]当前窗口无消息或无法从 Vue store 读取。请确认已打开目标群聊。[/yellow]")
+                            return
+                        recorder = ChatHistoryRecorder(
+                            workspace=workspace,
+                            admin_names=sw.admin_names,
+                            admin_ids=sw.admin_ids,
+                        )
+                        added = recorder.save_fetched_messages(
+                            channel=channel,
+                            chat_id=curr,
+                            messages=msgs,
+                            is_group="team" in curr,
+                        )
+                        console.print(f"[green]{_check()}[/green] 采集 {len(msgs)} 条，去重后新增 {added} 条 → {curr}")
+                        if added < len(msgs):
+                            console.print("[dim]部分消息已存在（实时记录），已跳过[/dim]")
+                        return
+                    if data.get("type") == "error":
+                        console.print(f"[red]{data.get('error', 'Unknown error')}[/red]")
+                        return
+        except Exception as e:
+            console.print(f"[red]连接 bridge 失败: {e}[/red]")
+            console.print("[dim]请确认 shangwang-bridge 已启动，且已在商网中打开目标群聊[/dim]")
+
+    asyncio.run(_run())
+
+
+@chat_history_app.command("re-role")
+def chat_history_re_role_cmd(
+    channel: str = typer.Option("shangwang", "--channel", "-c", help="Channel name"),
+    chat_id: str = typer.Option(None, "--chat-id", "-i", help="Only re-role this chat"),
+):
+    """根据当前 admin 配置重新标记历史消息的 role。配置 admin 后运行此命令再 export。"""
+    from nanobot.config.loader import load_config
+    from nanobot.chat_history.recorder import ChatHistoryRecorder
+
+    config = load_config()
+    sw = config.channels.shangwang
+    recorder = ChatHistoryRecorder(
+        workspace=config.workspace_path,
+        admin_names=sw.admin_names,
+        admin_ids=sw.admin_ids,
+    )
+    n = recorder.re_role(channel=channel, chat_id_filter=chat_id)
+    console.print(f"[green]{_check()}[/green] 已更新 {n} 条消息的 role。可运行 export 导出。")
+
+
 @chat_history_app.command("diagnose")
 def chat_history_diagnose_cmd(
     channel: str = typer.Option("shangwang", "--channel", "-c", help="Channel name"),
@@ -801,15 +884,22 @@ def chat_history_diagnose_cmd(
     console.print("adminNames:", diag["admin_names"] or "(未配置)")
     console.print("adminIds:", diag["admin_ids"] or "(未配置)")
     if diag["chats"]:
-        from rich.table import Table
         table = Table(title="会话诊断")
         table.add_column("chat_id", style="cyan")
         table.add_column("总消息", justify="right")
         table.add_column("admin", justify="right")
         table.add_column("customer", justify="right")
+        table.add_column("unknown", justify="right")
         table.add_column("可提取对", justify="right")
         for c in diag["chats"]:
-            table.add_row(c["chat_id"], str(c["total"]), str(c["admin"]), str(c["customer"]), str(c["qa_pairs"]))
+            table.add_row(
+                c["chat_id"],
+                str(c["total"]),
+                str(c["admin"]),
+                str(c["customer"]),
+                str(c.get("unknown", 0)),
+                str(c["qa_pairs"]),
+            )
         console.print(table)
     console.print(f"\n[cyan]{diag['hint']}[/cyan]")
 

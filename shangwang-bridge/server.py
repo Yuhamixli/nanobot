@@ -202,6 +202,7 @@ async def _poll_messages():
                     "content": text,
                     "msg_type": msg.get("msgType", "text"),
                     "timestamp": msg.get("time", time.time()),
+                    "id_client": msg.get("idClient", ""),
                     "is_group": is_group,
                 }
                 if media_paths:
@@ -271,6 +272,13 @@ async def _handle_message(ws: websockets.WebSocketServerProtocol, raw: str) -> N
             "type": "my_id",
             "account": _my_account_id or "",
         }))
+
+    elif msg_type == "fetch_current_chat":
+        if not await _ensure_cdp():
+            await ws.send(json.dumps({"type": "error", "error": "CDP 未连接"}))
+        else:
+            result = await _cdp.fetch_current_chat()
+            await ws.send(json.dumps({"type": "fetch_current_chat", **result}, ensure_ascii=False))
 
     elif msg_type == "current_session":
         if not await _ensure_cdp():

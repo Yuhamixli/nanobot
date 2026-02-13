@@ -43,13 +43,18 @@
 
 **导出与导入**：
 ```bash
+# 方案二：实时记录（gateway 运行即自动记录，无需配置 admin 也可先存）
 nanobot chat-history list            # 查看已记录的会话 ID（team-xxx 等）
-nanobot chat-history diagnose        # 诊断为何无法导出（检查 admin 配置）
+nanobot chat-history fetch-chat      # 方案四：从当前窗口采集历史（需先切换到目标群）
+nanobot chat-history re-role         # 配置 admin 后重新标记 role
+nanobot chat-history diagnose        # 诊断为何无法导出
 nanobot chat-history export          # 导出全部
 nanobot chat-history export --chat-id team-xxx   # 只导出指定群
 nanobot chat-history export-ingest   # 导出并 ingest 到知识库
 ```
-导出结果会标注每条示例的来源群（chat_id）。若 export 无结果，运行 `diagnose` 查看 admin 消息数及配置。
+- **方案二**：gateway 启动时即开始记录，无需 admin 也可先存（后续可 re-role）
+- **方案四**：fetch-chat 从 Vue store 采集当前窗口历史，与实时记录自动去重
+- 导出结果会标注每条示例的来源群（chat_id）
 
 **配置**：在 `~/.nanobot/config.json` 的 `channels.shangwang` 中：
 - `chatHistoryEnabled`: true（默认）
