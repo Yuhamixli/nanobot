@@ -108,6 +108,7 @@ CDP 目标: http://127.0.0.1:9222
 | `SHANGWANG_CDP_PORT` | `9222` | CDP 端口 |
 | `SHANGWANG_POLL_INTERVAL` | `3` | 消息轮询间隔(秒) |
 | `SHANGWANG_FILES_DIR` | `workspace/shangwang-files` | 附件下载目录（与 nanobot workspace 统一） |
+| `SHANGWANG_AVICOFFICE_CACHE` | （空） | AvicOffice 缓存目录，下载失败时从此处复制（如 `C:\Zoolo\AvicOffice Files`） |
 
 ## 协议
 
@@ -164,7 +165,7 @@ nanobot 通过 NIM SDK 发送的消息会被 hook 再次捕获，bridge 通过�
 - [x] 回显过滤 + 去重
 - [x] 与 nanobot gateway 双向通信
 - [x] 群聊仅回复 @提及 的消息（可配置 `mentionNames`）
-- [x] 图片/文件消息：自动下载（aiohttp + CDP 页面 fetch 兜底，解决 NOS 403 鉴权）
+- [x] 图片/文件消息：自动下载（aiohttp → CDP fetch → 模拟点击下载 → AvicOffice 缓存兜底）
 - [x] 附件写入 `workspace/shangwang-files`，channel 自动复制到 `knowledge/长期/来自商网`
 - [ ] 会话列表管理
 
@@ -175,4 +176,4 @@ nanobot 通过 NIM SDK 发送的消息会被 hook 再次捕获，bridge 通过�
 - **浏览器访问 `http://localhost:9222`**: 可查看所有可调试页面
 - **消息重复**: 调整 `_DEDUP_WINDOW_SEC`（默认 5 秒）
 - **回复到错误会话**: 检查 sessionId 格式是否为 `p2p-xxx` 或 `team-xxx`
-- **文件下载 403**: 已通过 CDP 页面 fetch（带 cookies）兜底；若仍失败，检查 NOS URL 是否过期
+- **文件下载 403**: 图片通常可直连，文档类(docx/zip) NOS 可能需鉴权。Bridge 会依次尝试：1) aiohttp 直连 2) CDP 页面 fetch 3) 模拟点击下载（`<a download>` 或页面中的下载按钮）4) 从 AvicOffice 缓存复制。若仍失败，可设置 `SHANGWANG_AVICOFFICE_CACHE=C:\Zoolo\AvicOffice Files`，用户手动下载后 bridge 会从该目录复制

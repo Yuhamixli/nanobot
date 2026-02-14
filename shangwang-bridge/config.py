@@ -21,6 +21,8 @@ def load_config() -> dict:
         "poll_interval_sec": float(os.environ.get("SHANGWANG_POLL_INTERVAL", "3")),
         # File download (NIM NOS)，默认写入 workspace/shangwang-files，channel 会复制到 knowledge
         "files_dir": os.environ.get("SHANGWANG_FILES_DIR", str(default_files_dir)),
+        # AvicOffice 应用缓存目录，下载失败时可尝试从此处复制（如 C:\Zoolo\AvicOffice Files）
+        "avicoffice_cache_dir": os.environ.get("SHANGWANG_AVICOFFICE_CACHE", ""),
     }
     config_file = root / "config.json"
     if config_file.exists():

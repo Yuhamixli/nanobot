@@ -11,6 +11,7 @@ import asyncio
 import base64
 import json
 import logging
+from pathlib import Path
 from typing import Any, Callable, Coroutine
 
 import aiohttp
@@ -738,6 +739,104 @@ class CDPClient:
             pass
         except Exception as e:
             logger.warning("CDP read loop terminated: %s", e)
+
+    async def click_download_and_save(
+        self, url: str, dest_dir: Path, base_name: str, ext: str
+    ) -> Path | None:
+        """当 fetch 失败时，通过模拟点击下载按钮获取文件。
+        策略：1) 创建 <a download> 并点击；2) 查找页面中含该 URL 的链接并点击。
+        需配合 Page.setDownloadBehavior 指定下载目录。"""
+        dest_dir = Path(dest_dir)
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        safe_ext = ext.lstrip(".") if ext else "dat"
+        target_name = f"{base_name}.{safe_ext}"
+        download_path = str(dest_dir.resolve())
+
+        try:
+            await self._send_command("Page.enable")
+            await self._send_command(
+                "Page.setDownloadBehavior",
+                {"behavior": "allow", "downloadPath": download_path},
+            )
+        except Exception as e:
+            logger.warning("Page.setDownloadBehavior 失败: %s", e)
+            return None
+
+        # 策略1: 创建临时 <a download> 并点击（利用页面 cookies）
+        script_click = f"""
+        (function() {{
+            try {{
+                var url = {json.dumps(url)};
+                var filename = {json.dumps(target_name)};
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                return true;
+            }} catch(e) {{ return false; }}
+        }})()
+        """
+        try:
+            clicked = await self.evaluate(script_click)
+            if clicked:
+                # 等待文件出现（浏览器可能加 .crdownload 后缀，完成后会重命名）
+                for _ in range(30):
+                    await asyncio.sleep(0.5)
+                    target = dest_dir / target_name
+                    if target.exists():
+                        return target
+                    # 检查 .crdownload 临时文件
+                    for f in dest_dir.glob(f"{base_name}*"):
+                        if not f.name.endswith(".crdownload"):
+                            return f
+        except Exception as e:
+            logger.debug("策略1 点击失败: %s", e)
+
+        # 策略2: 查找页面中已存在的下载链接/按钮（含该 URL）
+        url_frag = url.split("/")[-1][:50] if "/" in url else url[:50]
+        script_find = f"""
+        (function() {{
+            try {{
+                var frag = {json.dumps(url_frag)};
+                var all = document.querySelectorAll('a[href*="imnos.avic.com"], [href*="imnos.avic.com"], [data-url*="imnos.avic.com"]');
+                for (var i = 0; i < all.length; i++) {{
+                    var href = (all[i].href || all[i].getAttribute('href') || all[i].getAttribute('data-url') || '');
+                    if (href.indexOf(frag) >= 0) {{
+                        all[i].click();
+                        return true;
+                    }}
+                }}
+                // 查找下载图标（通常在文件气泡旁）
+                var icons = document.querySelectorAll('[class*="download"], [class*="Download"], [title*="下载"], [aria-label*="下载"]');
+                for (var j = 0; j < icons.length; j++) {{
+                    var parent = icons[j].closest('[class*="message"], [class*="msg"], [class*="bubble"]');
+                    if (parent && parent.innerText && parent.innerText.indexOf(frag) >= 0) {{
+                        icons[j].click();
+                        return true;
+                    }}
+                }}
+                return false;
+            }} catch(e) {{ return false; }}
+        }})()
+        """
+        try:
+            clicked = await self.evaluate(script_find.replace("url", json.dumps(url)))
+            if clicked:
+                for _ in range(30):
+                    await asyncio.sleep(0.5)
+                    target = dest_dir / target_name
+                    if target.exists():
+                        return target
+                    for f in dest_dir.glob(f"{base_name}*"):
+                        if not f.name.endswith(".crdownload"):
+                            return f
+        except Exception as e:
+            logger.debug("策略2 查找点击失败: %s", e)
+
+        return None
 
     async def fetch_in_page(self, url: str) -> bytes | None:
         """Fetch URL in page context (uses page cookies for NOS auth). Returns bytes or None."""

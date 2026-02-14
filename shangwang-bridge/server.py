@@ -5,6 +5,7 @@ import collections
 import json
 import logging
 import re
+import shutil
 import time
 from pathlib import Path
 
@@ -44,10 +45,38 @@ def _safe_filename(name: str) -> str:
     return re.sub(r'[<>:"/\\|?*]', "_", name)[:120]
 
 
+def _find_in_avicoffice_cache(
+    cache_dir: str | Path, file_name: str, dest_dir: Path, base_name: str, ext: str
+) -> Path | None:
+    """从 AvicOffice 缓存目录查找并复制文件（用户手动下载后可能存于此）。"""
+    if not cache_dir or not str(cache_dir).strip():
+        return None
+    cache = Path(cache_dir).expanduser()
+    if not cache.exists():
+        return None
+    safe_ext = ext.lstrip(".") if ext else "dat"
+    target = dest_dir / f"{base_name}.{safe_ext}"
+    # 按文件名模糊匹配（可能带时间戳等后缀）
+    name_base = Path(file_name).stem if file_name else base_name
+    for f in cache.rglob("*"):
+        if not f.is_file():
+            continue
+        if name_base in f.stem or (file_name and f.name == file_name):
+            try:
+                shutil.copy2(f, target)
+                logger.info("已从 AvicOffice 缓存复制: %s -> %s", f.name, target.name)
+                return target
+            except Exception as e:
+                logger.warning("复制缓存文件失败: %s", e)
+    return None
+
+
 async def _download_file(
     url: str, dest_dir: Path, base_name: str, ext: str, cdp: CDPClient | None = None
 ) -> Path | None:
-    """Download file from NIM NOS URL. Uses CDP page fetch when aiohttp gets 403 (NOS needs cookies)."""
+    """Download file from NIM NOS URL.
+    策略顺序: 1) aiohttp 直连; 2) CDP 页面 fetch; 3) CDP 模拟点击下载; 4) AvicOffice 缓存。
+    图片通常可直连，文档类( docx/zip 等) NOS 可能返回 403，需点击下载。"""
     dest_dir.mkdir(parents=True, exist_ok=True)
     safe_ext = ext.lstrip(".") if ext else "bin"
     if not safe_ext or safe_ext == "bin":
@@ -80,7 +109,25 @@ async def _download_file(
             return path
     except Exception as e:
         logger.warning("页面 fetch 下载失败: %s", e)
+
+    # 3. 模拟点击下载（创建 <a download> 或查找页面中的下载按钮）
+    if cdp and cdp.connected:
+        try:
+            result = await cdp.click_download_and_save(url, dest_dir, base_name, safe_ext)
+            if result:
+                logger.info("已通过点击下载获取文件: %s", result.name)
+                return result
+        except Exception as e:
+            logger.warning("点击下载失败: %s", e)
+
     return None
+
+
+def _try_avicoffice_cache(
+    file_name: str, dest_dir: Path, base_name: str, ext: str, cache_dir: str
+) -> Path | None:
+    """下载失败时的兜底：从 AvicOffice 缓存复制。"""
+    return _find_in_avicoffice_cache(cache_dir, file_name, dest_dir, base_name, ext)
 
 
 async def _connect_cdp() -> bool:
@@ -214,6 +261,13 @@ async def _poll_messages():
                     local_path = await _download_file(
                         file_url, files_dir, base_name, ext, cdp=_cdp
                     )
+                    if not local_path:
+                        # 兜底：从 AvicOffice 缓存复制（用户手动下载后可能存于 C:\Zoolo\AvicOffice Files）
+                        cache_dir = _config.get("avicoffice_cache_dir", "")
+                        if cache_dir:
+                            local_path = _try_avicoffice_cache(
+                                file_name or "", files_dir, base_name, ext, cache_dir
+                            )
                     if local_path:
                         media_paths.append(str(local_path))
                     else:
