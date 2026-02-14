@@ -676,24 +676,34 @@ class CDPClient:
             await self._session.close()
             self._session = None
 
-    async def _send_command(self, method: str, params: dict | None = None) -> dict:
-        """Send a CDP command and wait for result."""
+    async def _send_command(
+        self, method: str, params: dict | None = None, timeout: float = 30, retries: int = 2
+    ) -> dict:
+        """Send a CDP command and wait for result. Retries on timeout."""
         if not self.connected:
             raise ConnectionError("CDP not connected")
-        self._msg_id += 1
-        msg_id = self._msg_id
-        msg = {"id": msg_id, "method": method, "params": params or {}}
+        last_err = None
+        for attempt in range(retries + 1):
+            self._msg_id += 1
+            msg_id = self._msg_id
+            msg = {"id": msg_id, "method": method, "params": params or {}}
 
-        fut: asyncio.Future = asyncio.get_event_loop().create_future()
-        self._pending[msg_id] = fut
-        await self._ws.send_json(msg)
+            fut: asyncio.Future = asyncio.get_event_loop().create_future()
+            self._pending[msg_id] = fut
+            await self._ws.send_json(msg)
 
-        try:
-            result = await asyncio.wait_for(fut, timeout=30)
-            return result
-        except asyncio.TimeoutError:
-            self._pending.pop(msg_id, None)
-            raise TimeoutError(f"CDP command timed out: {method}")
+            try:
+                result = await asyncio.wait_for(fut, timeout=timeout)
+                return result
+            except asyncio.TimeoutError:
+                self._pending.pop(msg_id, None)
+                last_err = TimeoutError(f"CDP command timed out: {method}")
+                if attempt < retries:
+                    logger.warning("CDP %s timeout, retry %d/%d", method, attempt + 1, retries)
+                    await asyncio.sleep(1)
+                else:
+                    raise last_err
+        raise last_err
 
     async def _read_loop(self):
         """Background reader for CDP WebSocket messages."""
@@ -786,7 +796,7 @@ class CDPClient:
         return []
 
     async def send_text(self, session_id: str, text: str) -> dict:
-        """Send a text message via NIM SDK."""
+        """Send a text message via NIM SDK. Uses _send_command retries on CDP timeout."""
         script = _SEND_SCRIPT_TEMPLATE.format(
             session_id=json.dumps(session_id),
             text=json.dumps(text),

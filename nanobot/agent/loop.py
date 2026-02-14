@@ -265,8 +265,8 @@ class AgentLoop:
                 final_content = response.content
                 break
         
-        if final_content is None:
-            final_content = "I've completed processing but have no response to give."
+        if final_content is None or not (final_content and str(final_content).strip()):
+            final_content = "处理完成，但暂无文字回复。"
         
         # Save to session
         session.add_message("user", msg.content)
@@ -357,7 +357,7 @@ class AgentLoop:
                 final_content = response.content
                 break
         
-        if final_content is None:
+        if final_content is None or not (final_content and str(final_content).strip()):
             final_content = "Background task completed."
         
         # Save to session (mark as system message in history)

@@ -250,6 +250,11 @@ async def _handle_message(ws: websockets.WebSocketServerProtocol, raw: str) -> N
         _sent_texts.append(text.strip())
 
         result = await _cdp.send_text(chat_id, text)
+        # 若 CDP 超时，重试一次
+        if not result.get("ok") and "timed out" in str(result.get("error", "")).lower():
+            logger.warning("CDP send_text 超时，重试一次")
+            await asyncio.sleep(2)
+            result = await _cdp.send_text(chat_id, text)
         if result.get("ok"):
             await ws.send(json.dumps({"type": "status", "status": "sent"}))
             logger.info("← nanobot: 已发送到 [%s]: %s", chat_id[:20], text[:50])

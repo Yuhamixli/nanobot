@@ -19,11 +19,47 @@ _KNOWLEDGE_EXTS = {".pdf", ".docx", ".xlsx", ".txt", ".md"}
 _LONG_TERM_DIR = "长期"
 
 
+def _markdown_table_to_list(text: str) -> str:
+    """将 Markdown 表格转为列表形式（商网不渲染表格）。"""
+    lines = text.split("\n")
+    result: list[str] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        # 检测表格行：以 | 开头和结尾
+        if re.match(r"^\|.+\|$", line):
+            rows: list[list[str]] = []
+            while i < len(lines) and re.match(r"^\|.+\|$", lines[i]):
+                cells = [c.strip() for c in lines[i].split("|")[1:-1]]
+                if cells:
+                    rows.append(cells)
+                i += 1
+            if len(rows) >= 2:
+                # 第一行表头，第二行分隔符（|---|），数据从第三行起
+                header = rows[0]
+                is_sep = len(rows) > 1 and all(
+                    re.match(r"^[-:\s]+$", c) for c in rows[1]
+                )
+                data_start = 2 if is_sep else 1
+                for row in rows[data_start:]:
+                    if len(row) == len(header):
+                        parts = [f"{h}：{v}" for h, v in zip(header, row) if v]
+                        result.append("\n".join(f"- {p}" for p in parts))
+                    elif len(row) == 1 and row[0]:
+                        result.append(f"- {row[0]}")
+            continue
+        result.append(line)
+        i += 1
+    return "\n".join(result)
+
+
 def _markdown_to_plain_text(text: str) -> str:
     """将 Markdown 转为纯文本，商网办公无法渲染 Markdown 时使用。"""
     if not text:
         return text
     t = text
+    # 表格 -> 列表形式（需在其它替换前处理，避免 | 被破坏）
+    t = _markdown_table_to_list(t)
     # 代码块 ```...``` -> 保留内容
     t = re.sub(r"```(?:[\w]*\n)?(.*?)```", r"\1", t, flags=re.DOTALL)
     # 行内代码 `...` -> 保留内容
@@ -167,7 +203,9 @@ class ShangwangChannel(BaseChannel):
             logger.warning("商网 bridge not connected")
             return
         try:
-            plain = _markdown_to_plain_text(msg.content)
+            plain = _markdown_to_plain_text(msg.content or "")
+            if not plain.strip():
+                plain = "处理完成，但暂无文字回复。"
             # 群聊回复截断至配置的最大字数
             if "team" in msg.chat_id:
                 max_len = self.config.group_reply_max_length
