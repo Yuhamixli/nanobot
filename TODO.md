@@ -121,6 +121,10 @@ P3 (后续):    ocr 独立工具（或复用 image_understander skill）
 - [ ] 多用户会话隔离
 - [ ] 性能优化（长对话 token 管理）
 
+### Phase 7: 业务需求
+- [ ] 涉密信息查询
+- [ ] 公文格式skill
+- [ ] 知识审计skill
 ---
 
 ## 备注

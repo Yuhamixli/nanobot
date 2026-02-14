@@ -40,25 +40,43 @@ def _safe_filename(name: str) -> str:
     return re.sub(r'[<>:"/\\|?*]', "_", name)[:120]
 
 
-async def _download_file(url: str, dest_dir: Path, base_name: str, ext: str) -> Path | None:
-    """Download file from NIM NOS URL to local path. Returns path or None on failure."""
+async def _download_file(
+    url: str, dest_dir: Path, base_name: str, ext: str, cdp: CDPClient | None = None
+) -> Path | None:
+    """Download file from NIM NOS URL. Uses CDP page fetch when aiohttp gets 403 (NOS needs cookies)."""
     dest_dir.mkdir(parents=True, exist_ok=True)
     safe_ext = ext.lstrip(".") if ext else "bin"
     if not safe_ext or safe_ext == "bin":
         safe_ext = "dat"
     path = dest_dir / f"{base_name}.{safe_ext}"
+
+    # 1. Try direct aiohttp first
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=60)) as resp:
-                if resp.status != 200:
+                if resp.status == 200:
+                    path.write_bytes(await resp.read())
+                    logger.info("已下载文件: %s", path.name)
+                    return path
+                if resp.status not in (401, 403, 407) or not cdp or not cdp.connected:
                     logger.warning("下载文件失败 HTTP %s: %s", resp.status, url[:80])
                     return None
-                path.write_bytes(await resp.read())
-        logger.info("已下载文件: %s", path.name)
-        return path
+                logger.info("HTTP %s，尝试通过页面 fetch（带 cookies）下载", resp.status)
     except Exception as e:
-        logger.warning("下载文件失败: %s", e)
-        return None
+        logger.warning("aiohttp 下载失败: %s", e)
+        if not cdp or not cdp.connected:
+            return None
+
+    # 2. Retry via CDP page fetch (uses browser cookies for NOS auth)
+    try:
+        data = await cdp.fetch_in_page(url)
+        if data:
+            path.write_bytes(data)
+            logger.info("已通过页面 fetch 下载文件: %s", path.name)
+            return path
+    except Exception as e:
+        logger.warning("页面 fetch 下载失败: %s", e)
+    return None
 
 
 async def _connect_cdp() -> bool:
@@ -189,17 +207,25 @@ async def _poll_messages():
                     files_dir = Path(_config.get("files_dir", str(Path.home() / ".nanobot" / "shangwang-files")))
                     base_name = _safe_filename(f"{session_id}_{msg.get('idClient', '')}"[:80] or "file")
                     ext = file_ext or (file_name.split(".")[-1] if file_name else "")
-                    local_path = await _download_file(file_url, files_dir, base_name, ext)
+                    local_path = await _download_file(
+                        file_url, files_dir, base_name, ext, cdp=_cdp
+                    )
                     if local_path:
                         media_paths.append(str(local_path))
+                    else:
+                        logger.warning("文件下载失败: url=%s name=%s (NOS 链接可能过期或需鉴权)", file_url[:80], file_name or "(无)")
 
                 is_group = "team" in session_id
+                content = text
+                # 下载失败时提示 agent，便于回复用户
+                if file_url and not media_paths:
+                    content = (content + "\n\n[提醒: 附件下载失败，请用户重新发送文件]") if content.strip() else "[提醒: 附件下载失败，请用户重新发送文件]"
                 payload = {
                     "type": "message",
                     "sender": from_nick,
                     "sender_id": from_id,
                     "chat_id": session_id,
-                    "content": text,
+                    "content": content,
                     "msg_type": msg.get("msgType", "text"),
                     "timestamp": msg.get("time", time.time()),
                     "id_client": msg.get("idClient", ""),

@@ -8,6 +8,7 @@ and provides methods to:
 """
 
 import asyncio
+import base64
 import json
 import logging
 from typing import Any, Callable, Coroutine
@@ -192,7 +193,10 @@ _HOOK_SCRIPT = r"""
                     type.indexOf('addMsg') >= 0 ||
                     type.indexOf('receiveMsg') >= 0 ||
                     type.indexOf('onMsg') >= 0 ||
-                    type.indexOf('updateCurrSessionMsgs') >= 0
+                    type.indexOf('updateCurrSessionMsgs') >= 0 ||
+                    type.indexOf('pushMsg') >= 0 ||
+                    type.indexOf('setCurrSessionMsgs') >= 0 ||
+                    type.indexOf('appendMsg') >= 0
                 );
 
                 // Broader fallback: mutation has 'Msg' in name AND payload looks like a message
@@ -216,12 +220,14 @@ _HOOK_SCRIPT = r"""
                     if (!msg || typeof msg !== 'object') return;
 
                     var text = msg.text || '';
-                    var msgType = msg.type || 'text';
-                    var file = msg.file || msg.attach || {};
+                    var msgType = msg.type || msg.msgType || 'text';
+                    // NIM SDK: file 可能在 msg.file、msg.attach 或 msg.body（文件消息 type=6）
+                    var file = msg.file || msg.attach || msg.body || {};
 
                     // Accept: (1) text message with content, or (2) image/file message with file.url
                     var hasText = text && typeof text === 'string' && text.length >= 1 && text.charAt(0) !== '{' && text.charAt(0) !== '[';
-                    var hasFile = file && file.url;
+                    var fileUrl = file.url || file.path || (file.link && (typeof file.link === 'string' ? file.link : file.link.url));
+                    var hasFile = file && fileUrl;
 
                     if (!hasText && !hasFile) return;
 
@@ -254,7 +260,7 @@ _HOOK_SCRIPT = r"""
                         flow: msg.flow || ''
                     };
                     if (hasFile) {
-                        payload.fileUrl = file.url;
+                        payload.fileUrl = fileUrl;
                         payload.fileName = file.name || file.fileName || '';
                         payload.fileExt = (file.ext || '').toLowerCase() || (file.name ? file.name.split('.').pop() : '');
                         if (msgType === 'image' && !payload.fileExt) payload.fileExt = 'jpg';
@@ -732,6 +738,37 @@ class CDPClient:
             pass
         except Exception as e:
             logger.warning("CDP read loop terminated: %s", e)
+
+    async def fetch_in_page(self, url: str) -> bytes | None:
+        """Fetch URL in page context (uses page cookies for NOS auth). Returns bytes or None."""
+        script = f"""
+        (async function() {{
+            try {{
+                const url = {json.dumps(url)};
+                const resp = await fetch(url);
+                if (!resp.ok) return JSON.stringify({{ok: false, status: resp.status}});
+                const ab = await resp.arrayBuffer();
+                const bytes = new Uint8Array(ab);
+                let binary = '';
+                for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+                return JSON.stringify({{ok: true, base64: btoa(binary)}});
+            }} catch(e) {{
+                return JSON.stringify({{ok: false, error: e.message}});
+            }}
+        }})()
+        """
+        try:
+            raw = await self.evaluate(script, await_promise=True)
+            if not raw:
+                return None
+            data = json.loads(raw)
+            if not data.get("ok"):
+                logger.warning("页面 fetch 失败: %s", data)
+                return None
+            return base64.b64decode(data["base64"])
+        except Exception as e:
+            logger.warning("fetch_in_page error: %s", e)
+            return None
 
     async def evaluate(self, expression: str, await_promise: bool = False) -> Any:
         """Execute JS in the page context and return the result value."""
