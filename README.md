@@ -125,6 +125,8 @@ nanobot agent -m "What is 2+2?"
 
 That's it! You have a working AI assistant in 2 minutes.
 
+> **项目模式**：将 `config.example.json` 复制为 `~/.nanobot/config.json`，workspace 已指向 `c:/Projects/nanobot/workspace`，知识库、记忆、技能随项目版本控制与部署。
+
 ## 🌐 RPA / 浏览器自动化
 
 通过 **browser_automation** 工具，可以让 agent 驱动浏览器：打开外网页面、登录、填表、点击、提取内容，适合与需要在前端操作的平台（如企业商网）对接。
@@ -263,7 +265,7 @@ pip install nanobot-ai[rag]
 ```
 
 **2. 放置文档**  
-将制度、规范、政策等文件放入 **workspace 下的 `knowledge` 目录**（如 `~/.nanobot/workspace/knowledge/`）。支持：TXT、MD、PDF、Word(.docx)、Excel(.xlsx)。
+将制度、规范、政策等文件放入 **workspace 下的 `knowledge` 目录**。项目模式：`c:/Projects/nanobot/workspace/knowledge/`；默认：`~/.nanobot/workspace/knowledge/`。支持：TXT、MD、PDF、Word(.docx)、Excel(.xlsx)。
 
 **3. 导入知识库**
 

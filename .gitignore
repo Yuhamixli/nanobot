@@ -1,8 +1,8 @@
 .assets
 .env
-# 知识库目录：忽略用户放入的文档，保留 README.md
-workspace/knowledge/*
-!workspace/knowledge/README.md
+# 知识库：忽略向量库、web 缓存；长期/、回复示例/ 等可随项目提交
+workspace/knowledge_db/
+workspace/knowledge/短期/_cache_web/
 # 商网群聊历史（运行时生成）
 workspace/chat_history/
 

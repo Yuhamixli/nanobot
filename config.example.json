@@ -1,7 +1,7 @@
 {
   "agents": {
     "defaults": {
-      "workspace": "~/.nanobot/workspace",
+      "workspace": "c:/Projects/nanobot/workspace",
       "model": "anthropic/claude-opus-4-5",
       "maxTokens": 8192,
       "temperature": 0.7,

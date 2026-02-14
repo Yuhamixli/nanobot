@@ -79,7 +79,7 @@ nanobot onboard
 会创建：
 
 - `~/.nanobot/config.json`（默认配置）
-- `~/.nanobot/workspace/`（工作区：AGENTS.md、SOUL.md、USER.md、memory/ 等）
+- `~/.nanobot/workspace/`（默认工作区）或项目内 `c:/Projects/nanobot/workspace/`（项目模式，可随项目部署）
 
 项目根目录下的 `config.example.json` 为完整配置模板（camelCase），可作参考或复制后改名使用。
 

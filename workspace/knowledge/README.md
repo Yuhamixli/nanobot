@@ -9,7 +9,7 @@
 | **长期/** | 制度、手册、政策、重要文档 | 不自动清理 |
 | **短期/** | 爬取内容、临时资料、web 缓存 | 按 TTL 定期清理（默认 7 天） |
 
-> **路径说明**：nanobot 默认工作区是 `~/.nanobot/workspace`，因此**实际放文档的目录**是 **`~/.nanobot/workspace/knowledge`**（如 Windows：`C:\Users\你的用户名\.nanobot\workspace\knowledge`），不是项目里的 `workspace\knowledge`。**不要**把文档堆在 workspace 根目录，也不要放进 `knowledge_db`（那是向量库，程序自动用）。首次运行 `nanobot knowledge ingest` 若该目录不存在会自动创建并提示路径。
+> **路径说明**：本项目采用**项目模式**，工作区为 `c:\Projects\nanobot\workspace`，知识库即本目录 `workspace/knowledge`。文档放此处可随项目版本控制与部署。向量库 `knowledge_db` 由程序自动管理，勿手动修改。首次运行 `nanobot knowledge ingest` 若目录不存在会自动创建。
 
 **推荐**：在 `knowledge/长期/` 下按主题建子文件夹，例如 `knowledge/长期/财务制度`、`knowledge/长期/集团发文`。执行 `nanobot knowledge ingest` 会递归导入整个 knowledge；若只导入某一类，可执行 `nanobot knowledge ingest knowledge/长期`。
 
@@ -22,7 +22,7 @@
 
 ## 你需要做的（使用步骤）
 
-1. **放置文件**：把要纳入知识库的文档复制到本目录 `workspace/knowledge/`（或你配置的 workspace 下的 `knowledge` 文件夹）。
+1. **放置文件**：把要纳入知识库的文档复制到本目录 `workspace/knowledge/`。
 2. **导入知识库**（二选一）：
    - **命令行**：在项目根目录执行  
      `nanobot knowledge ingest`  
@@ -34,7 +34,7 @@
 ## 首次使用前
 
 - 安装 RAG 依赖：`pip install nanobot-ai[rag]`（或从源码 `pip install -e ".[rag]"`）
-- 若未运行过 `nanobot onboard`，请先运行一次以创建 workspace 和本目录。
+- 确保 `~/.nanobot/config.json` 中 `agents.defaults.workspace` 指向项目 workspace（如 `c:/Projects/nanobot/workspace`）。
 - **首次 ingest 会下载 BGE 中文向量模型**（约数百 MB）。程序已默认使用国内镜像，若仍超时请检查网络；国外用户可设 `HF_ENDPOINT=https://huggingface.co`。
 
 ## 商网群聊历史 → 学习管理员回复口吻
