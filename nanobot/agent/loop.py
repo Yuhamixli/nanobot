@@ -266,6 +266,9 @@ class AgentLoop:
                 break
         
         if final_content is None or not (final_content and str(final_content).strip()):
+            logger.warning(
+                "Agent 未生成文字回复（final_content 为空），可能为模型返回格式或 token 限制导致"
+            )
             final_content = "处理完成，但暂无文字回复。"
         
         # Save to session

@@ -144,8 +144,9 @@ class KnowledgeIngestTool(Tool):
     name = "knowledge_ingest"
     description = (
         "Import documents (PDF, Word, Excel, TXT, MD) from a path into the local knowledge base. "
-        "When user says '放库里'/'导入知识库'/'这个也放你的库里', run this first with path='knowledge' to import any new files in workspace/knowledge. "
-        "After ingest, use knowledge_search to query this content."
+        "When message contains [附件: path] (e.g. from 商网), run this with the attachment path, then read/retrieve the content and provide a brief overview to the user. "
+        "When user says '放库里'/'导入知识库', run with path='knowledge' to import new files in workspace/knowledge. "
+        "After ingest, use knowledge_search or read_file to get content for summarization."
     )
     parameters = {
         "type": "object",

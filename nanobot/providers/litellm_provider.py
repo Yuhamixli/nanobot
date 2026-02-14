@@ -134,7 +134,24 @@ class LiteLLMProvider(LLMProvider):
         """Parse LiteLLM response into our standard format."""
         choice = response.choices[0]
         message = choice.message
-        
+
+        # content 可能是 str、None 或 list（如 [{"type":"text","text":"..."}]）
+        raw_content = getattr(message, "content", None)
+        if raw_content is None:
+            content = None
+        elif isinstance(raw_content, str):
+            content = raw_content
+        elif isinstance(raw_content, list):
+            parts = []
+            for block in raw_content:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    parts.append(block.get("text", ""))
+                elif isinstance(block, str):
+                    parts.append(block)
+            content = "\n".join(parts).strip() or None
+        else:
+            content = str(raw_content) if raw_content else None
+
         tool_calls = []
         if hasattr(message, "tool_calls") and message.tool_calls:
             for tc in message.tool_calls:
@@ -162,7 +179,7 @@ class LiteLLMProvider(LLMProvider):
             }
         
         return LLMResponse(
-            content=message.content,
+            content=content,
             tool_calls=tool_calls,
             finish_reason=choice.finish_reason or "stop",
             usage=usage,
