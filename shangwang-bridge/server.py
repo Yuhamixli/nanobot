@@ -14,6 +14,10 @@ import websockets
 from config import load_config
 from cdp import CDPClient
 
+# 与 config.py 一致：默认使用项目 workspace/shangwang-files
+_BRIDGE_ROOT = Path(__file__).resolve().parent
+_DEFAULT_FILES_DIR = _BRIDGE_ROOT.parent / "workspace" / "shangwang-files"
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
@@ -204,7 +208,7 @@ async def _poll_messages():
                 # Download file if present
                 media_paths = []
                 if file_url:
-                    files_dir = Path(_config.get("files_dir", str(Path.home() / ".nanobot" / "shangwang-files")))
+                    files_dir = Path(_config.get("files_dir", str(_DEFAULT_FILES_DIR)))
                     base_name = _safe_filename(f"{session_id}_{msg.get('idClient', '')}"[:80] or "file")
                     ext = file_ext or (file_name.split(".")[-1] if file_name else "")
                     local_path = await _download_file(

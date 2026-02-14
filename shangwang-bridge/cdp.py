@@ -745,7 +745,7 @@ class CDPClient:
         (async function() {{
             try {{
                 const url = {json.dumps(url)};
-                const resp = await fetch(url);
+                const resp = await fetch(url, {{ credentials: 'include', mode: 'cors' }});
                 if (!resp.ok) return JSON.stringify({{ok: false, status: resp.status}});
                 const ab = await resp.arrayBuffer();
                 const bytes = new Uint8Array(ab);
