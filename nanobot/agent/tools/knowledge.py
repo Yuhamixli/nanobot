@@ -144,9 +144,8 @@ class KnowledgeIngestTool(Tool):
     name = "knowledge_ingest"
     description = (
         "Import documents (PDF, Word, Excel, TXT, MD) from a path into the local knowledge base. "
-        "When message contains [附件: path] (e.g. from 商网), run this with the attachment path, then read/retrieve the content and provide a brief overview to the user. "
-        "When user says '放库里'/'导入知识库', run with path='knowledge' to import new files in workspace/knowledge. "
-        "After ingest, use knowledge_search or read_file to get content for summarization."
+        "When message contains [附件: path] (e.g. from 商网), run this first, then knowledge_get_document with the returned 'Source for retrieval' to get that document's content for summarization. "
+        "When user says '放库里'/'导入知识库', run with path='knowledge' to import new files in workspace/knowledge."
     )
     parameters = {
         "type": "object",
@@ -183,13 +182,18 @@ class KnowledgeIngestTool(Tool):
             return "Error: path cannot be empty"
         resolved = (self.workspace / path).resolve()
         if not resolved.exists():
-            return f"Error: path not found: {resolved}"
+            resolved = Path(path).resolve()
+        if not resolved.exists():
+            return f"Error: path not found: {path}"
         try:
             result = self._store.add_documents([resolved], skip_unsupported=True)
             added = result["added"]
             errors = result.get("errors", [])
             skipped = result.get("skipped", [])
+            sources = result.get("sources", [])
             msg = f"Ingested {added} chunk(s) from {path}."
+            if sources:
+                msg += f" Source for retrieval: {sources[0]}"
             if errors:
                 msg += f" Errors: {'; '.join(errors[:5])}"
                 if len(errors) > 5:
@@ -199,3 +203,60 @@ class KnowledgeIngestTool(Tool):
             return msg
         except Exception as e:
             return f"Error ingesting: {e}"
+
+
+class KnowledgeGetDocumentTool(Tool):
+    """获取指定文档在知识库中的全部内容，用于概述刚导入的附件。"""
+
+    name = "knowledge_get_document"
+    description = (
+        "Get all chunks of a document from the knowledge base by path. "
+        "Use this **immediately after knowledge_ingest** when summarizing an attachment: pass the same path or the 'Source for retrieval' from ingest result. "
+        "Returns the document content for you to write a brief overview. Do NOT use knowledge_search for attachment summary—it may return other documents."
+    )
+    parameters = {
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": (
+                    "Path to the document: workspace-relative (e.g. knowledge/长期/来自商网/xxx.docx) "
+                    "or the full path from [附件: ...]. Must match what was just ingested."
+                ),
+            },
+        },
+        "required": ["path"],
+    }
+
+    def __init__(
+        self,
+        workspace: Path,
+    ):
+        self.workspace = Path(workspace)
+        self._store = get_store(self.workspace)
+
+    async def execute(self, path: str, **kwargs: Any) -> str:
+        if self._store is None:
+            return f"Error: {RAG_INSTALL_HINT}"
+        path = path.strip()
+        if not path:
+            return "Error: path cannot be empty"
+        # 转为 workspace 相对路径（与 add_documents 中 source 格式一致）
+        try:
+            resolved = Path(path).resolve()
+            ws = self.workspace.resolve()
+            try:
+                source = str(resolved.relative_to(ws)).replace("\\", "/")
+            except ValueError:
+                source = path.replace("\\", "/")
+        except Exception:
+            source = path.replace("\\", "/")
+        chunks = self._store.get_document_chunks(source)
+        if not chunks:
+            return f"未在知识库中找到该文档: {source}。请先执行 knowledge_ingest 导入。"
+        lines = [f"Document: {source}\n"]
+        for i, c in enumerate(chunks, 1):
+            lines.append(f"--- Chunk {i} ---")
+            lines.append(c.get("content", "").strip())
+            lines.append("")
+        return "\n".join(lines).strip()

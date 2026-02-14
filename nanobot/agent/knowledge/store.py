@@ -239,15 +239,20 @@ class KnowledgeStore:
                     skipped.append(str(fp))
                     continue
                 chunks = _chunk_text(text, self.chunk_size, self.chunk_overlap)
-                rel = fp.relative_to(path if path.is_dir() else path.parent)
+                # source 使用 workspace 相对路径，便于按文档过滤检索
+                try:
+                    rel = fp.relative_to(self.workspace.resolve())
+                except ValueError:
+                    rel = fp.relative_to(path.parent) if path.is_dir() else fp.relative_to(path.parent)
+                source_key = str(rel).replace("\\", "/")
                 for i, c in enumerate(chunks):
-                    doc_id = f"{rel!s}_{i}".replace("\\", "/")
+                    doc_id = f"{source_key}_{i}".replace("/", "_").replace(" ", "_")
                     all_ids.append(doc_id)
                     all_chunks.append(c)
-                    all_metadatas.append({"source": str(rel), "chunk": i})
+                    all_metadatas.append({"source": source_key, "chunk": i})
 
         if not all_chunks:
-            return {"added": 0, "skipped": skipped, "errors": errors}
+            return {"added": 0, "skipped": skipped, "errors": errors, "sources": []}
 
         coll = self._get_collection()
         embeddings = self._embed(all_chunks)
@@ -258,7 +263,48 @@ class KnowledgeStore:
             metadatas=all_metadatas,
         )
         added = len(all_chunks)
-        return {"added": added, "skipped": skipped, "errors": errors}
+        sources_added = list({m["source"] for m in all_metadatas})
+        return {"added": added, "skipped": skipped, "errors": errors, "sources": sources_added}
+
+    def get_document_chunks(self, source: str) -> list[dict[str, Any]]:
+        """获取指定文档的所有 chunk（用于概述刚导入的附件）。source 为 workspace 相对路径。"""
+        try:
+            coll = self._get_collection()
+            # 支持完整路径或仅文件名匹配（兼容旧数据）
+            data = coll.get(
+                where={"source": source},
+                include=["documents", "metadatas"],
+            )
+            if not data or not data.get("ids") or not data["ids"]:
+                # 尝试仅用文件名匹配（旧数据 source 可能仅为文件名）
+                all_data = coll.get(include=["documents", "metadatas"])
+                if not all_data or not all_data.get("ids"):
+                    return []
+                ids_list = all_data["ids"][0] if all_data["ids"] else []
+                docs_list = (all_data["documents"] or [[]])[0]
+                metas_list = (all_data["metadatas"] or [[]])[0]
+                out = []
+                fname = Path(source).name
+                for i in range(len(ids_list)):
+                    meta = (metas_list[i] if i < len(metas_list) else {}) or {}
+                    s = meta.get("source", "")
+                    if s == source or s.endswith("/" + fname) or Path(s).name == fname:
+                        doc = docs_list[i] if i < len(docs_list) else ""
+                        out.append({"content": doc, "source": s, "chunk": meta.get("chunk", i)})
+                out.sort(key=lambda x: x.get("chunk", 0))
+                return out
+            out = []
+            for i, doc in enumerate(data["documents"][0] or []):
+                meta = (data["metadatas"][0] or [{}])[i]
+                out.append({
+                    "content": doc,
+                    "source": meta.get("source", source),
+                    "chunk": meta.get("chunk", i),
+                })
+            out.sort(key=lambda x: x.get("chunk", 0))
+            return out
+        except Exception:
+            return []
 
     def add_to_web_cache(
         self,
