@@ -5,6 +5,8 @@ workspace/knowledge_db/
 workspace/knowledge/短期/_cache_web/
 # 商网群聊历史（运行时生成）
 workspace/chat_history/
+# 商网附件暂存（bridge 下载后 channel 会复制到 knowledge）
+workspace/shangwang-files/
 
 *.pyc
 dist/

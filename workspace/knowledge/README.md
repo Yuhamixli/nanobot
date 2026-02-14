@@ -37,6 +37,10 @@
 - 确保 `~/.nanobot/config.json` 中 `agents.defaults.workspace` 指向项目 workspace（如 `c:/Projects/nanobot/workspace`）。
 - **首次 ingest 会下载 BGE 中文向量模型**（约数百 MB）。程序已默认使用国内镜像，若仍超时请检查网络；国外用户可设 `HF_ENDPOINT=https://huggingface.co`。
 
+## 商网附件与知识库
+
+商网发送的文档（.docx、.pdf 等）会由 bridge 自动下载到 `workspace/shangwang-files/`，channel 再复制到 `knowledge/长期/来自商网/`。用户说「学习知识」「放库里」时，agent 会调用 `knowledge_ingest` 处理这些路径。**无需**查找 `~/.nanobot/`。
+
 ## 商网群聊历史 → 学习管理员回复口吻
 
 当商网 channel 启用且配置了 `adminNames` / `adminIds` 时，群聊消息会自动记录到 `workspace/chat_history/shangwang/`。

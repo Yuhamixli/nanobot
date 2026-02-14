@@ -107,6 +107,7 @@ CDP 目标: http://127.0.0.1:9222
 | `SHANGWANG_CDP_HOST` | `127.0.0.1` | CDP 地址 |
 | `SHANGWANG_CDP_PORT` | `9222` | CDP 端口 |
 | `SHANGWANG_POLL_INTERVAL` | `3` | 消息轮询间隔(秒) |
+| `SHANGWANG_FILES_DIR` | `workspace/shangwang-files` | 附件下载目录（与 nanobot workspace 统一） |
 
 ## 协议
 
@@ -163,7 +164,8 @@ nanobot 通过 NIM SDK 发送的消息会被 hook 再次捕获，bridge 通过�
 - [x] 回显过滤 + 去重
 - [x] 与 nanobot gateway 双向通信
 - [x] 群聊仅回复 @提及 的消息（可配置 `mentionNames`）
-- [ ] 图片/文件消息支持
+- [x] 图片/文件消息：自动下载（aiohttp + CDP 页面 fetch 兜底，解决 NOS 403 鉴权）
+- [x] 附件写入 `workspace/shangwang-files`，channel 自动复制到 `knowledge/长期/来自商网`
 - [ ] 会话列表管理
 
 ## 故障排除
@@ -173,3 +175,4 @@ nanobot 通过 NIM SDK 发送的消息会被 hook 再次捕获，bridge 通过�
 - **浏览器访问 `http://localhost:9222`**: 可查看所有可调试页面
 - **消息重复**: 调整 `_DEDUP_WINDOW_SEC`（默认 5 秒）
 - **回复到错误会话**: 检查 sessionId 格式是否为 `p2p-xxx` 或 `team-xxx`
+- **文件下载 403**: 已通过 CDP 页面 fetch（带 cookies）兜底；若仍失败，检查 NOS URL 是否过期
