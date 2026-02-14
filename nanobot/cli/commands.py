@@ -655,6 +655,61 @@ def channels_login():
 
 
 # ============================================================================
+# Skill Commands
+# ============================================================================
+
+skill_app = typer.Typer(help="Skill management (create, init)")
+app.add_typer(skill_app, name="skill")
+
+
+@skill_app.command("init")
+def skill_init_cmd(
+    name: str = typer.Argument(..., help="Skill name (normalized to hyphen-case)"),
+    path: str = typer.Option(
+        None,
+        "--path",
+        "-p",
+        help="Output directory (default: workspace/skills)",
+    ),
+    resources: str = typer.Option(
+        "",
+        "--resources",
+        "-r",
+        help="Comma-separated: scripts,references,assets",
+    ),
+    examples: bool = typer.Option(
+        False,
+        "--examples",
+        "-e",
+        help="Create example files in resource directories",
+    ),
+):
+    """Initialize a new skill from template. Creates SKILL.md + optional scripts/references/assets."""
+    import subprocess
+    from nanobot.config.loader import load_config
+
+    config = load_config()
+    out_path = path or str(config.workspace_path / "skills")
+    script_path = Path(__file__).parent.parent / "skills" / "skill-creator" / "scripts" / "init_skill.py"
+    if not script_path.exists():
+        console.print(f"[red]init_skill.py not found: {script_path}[/red]")
+        raise typer.Exit(1)
+    args = [
+        sys.executable,
+        str(script_path),
+        name,
+        "--path",
+        out_path,
+    ]
+    if resources:
+        args.extend(["--resources", resources])
+    if examples:
+        args.append("--examples")
+    result = subprocess.run(args)
+    raise typer.Exit(result.returncode)
+
+
+# ============================================================================
 # Knowledge Base Commands
 # ============================================================================
 

@@ -42,6 +42,28 @@ exec(command: str, working_dir: str = None) -> str
 - Output is truncated at 10,000 characters
 - Optional `restrictToWorkspace` config to limit paths
 
+## Knowledge Base (RAG)
+
+需安装 `pip install nanobot-ai[rag]`，文档放入 `workspace/knowledge/` 后执行 `nanobot knowledge ingest`。
+
+### knowledge_search
+检索本地知识库，返回相关文档片段。业务/制度类问题**必须**先调用此工具。
+```
+knowledge_search(query: str, top_k: int = 5) -> str
+```
+
+### knowledge_list
+列出已导入知识库的文档及来源，用于确认导入状态、避免重复导入。
+```
+knowledge_list() -> str
+```
+
+### knowledge_ingest
+将指定目录下的文档导入知识库。支持 TXT、MD、PDF、Word、Excel。
+```
+knowledge_ingest(path: str = "knowledge") -> str
+```
+
 ## Web Access
 
 ### web_search
@@ -62,6 +84,16 @@ web_fetch(url: str, extractMode: str = "markdown", maxChars: int = 50000) -> str
 - Content is extracted using readability
 - Supports markdown or plain text extraction
 - Output is truncated at 50,000 characters by default
+
+## Browser Automation
+
+### browser_automation
+驱动浏览器执行操作（基于 Playwright）。支持 navigate、click、fill、extract 等步骤，适合登录、填表、抓取页面内容。
+```
+browser_automation(actions: list[dict]) -> str
+```
+
+需安装 `pip install nanobot-ai[rpa]` 并执行 `playwright install chromium`。
 
 ## Communication
 

@@ -1,15 +1,15 @@
-# nanobot 部署与使用指南
+# 中航小诺bot 部署与使用指南
 
-本文档帮助你从零完成 nanobot 的部署、配置与日常使用。
+本文档帮助你从零完成 中航小诺bot 的部署、配置与日常使用。
 
 ---
 
 ## 一、项目概述
 
-**nanobot** 是超轻量个人 AI 助手框架，具备：
+**中航小诺bot** 是超轻量个人 AI 助手框架，具备：
 
 - **命令行对话**：`nanobot agent -m "..."` 或交互模式
-- **多通道接入**：Telegram、WhatsApp（需 Node.js 与 bridge）
+- **多通道接入**：目前接受商网办公接入（需 Node.js 与 bridge）
 - **LLM 多源**：OpenRouter（推荐）、Anthropic、OpenAI、Groq、vLLM 等
 - **技能与工具**：内置 Web 搜索、执行命令、技能（github、weather、tmux 等）
 - **定时与心跳**：Cron 定时任务、30 分钟心跳唤醒
@@ -282,5 +282,6 @@ Linux/macOS 将 `%USERPROFILE%\.nanobot` 换为 `~/.nanobot` 即可。
 - 用户信息：编辑 `USER.md`。
 - 长期记忆：使用工作区 `memory/MEMORY.md`。
 - 技能与工具：见项目 `nanobot/skills/` 与 README「Project Structure」。
+- **可选**：商网办公、本地知识库 (RAG) 等进阶功能见主 README「Chat Apps → 商网办公」「本地知识库」章节。
 
 完成以上步骤后，即可完成「部署 → 配置 → 使用」全流程。

@@ -1,14 +1,12 @@
 <div align="center">
-  <img src="nanobot_logo.png" alt="nanobot" width="500">
-  <h1>nanobot: Ultra-Lightweight Personal AI Assistant</h1>
+  <img src="nanobot_logo.png" alt="中航小诺" width="500">
+  <h1>中航小诺，智能体协同网络管家</h1>
   <p>
     <a href="https://pypi.org/project/nanobot-ai/"><img src="https://img.shields.io/pypi/v/nanobot-ai" alt="PyPI"></a>
-    <a href="https://pepy.tech/project/nanobot-ai"><img src="https://static.pepy.tech/badge/nanobot-ai" alt="Downloads"></a>
+    <a href="https://pepy.tech/project/nanobot-ai"></a>
     <img src="https://img.shields.io/badge/python-≥3.11-blue" alt="Python">
     <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-    <a href="./COMMUNICATION.md"><img src="https://img.shields.io/badge/Feishu-Group-E9DBFC?style=flat&logo=feishu&logoColor=white" alt="Feishu"></a>
-    <a href="./COMMUNICATION.md"><img src="https://img.shields.io/badge/WeChat-Group-C5EAB4?style=flat&logo=wechat&logoColor=white" alt="WeChat"></a>
-    <a href="https://discord.gg/MnCvHqpUGB"><img src="https://img.shields.io/badge/Discord-Community-5865F2?style=flat&logo=discord&logoColor=white" alt="Discord"></a>
+    
   </p>
 </div>
 
@@ -192,13 +190,98 @@ Talk to your nanobot through Telegram, WhatsApp, or 企业微信 (WeCom) — any
 
 | Channel | Setup |
 |---------|-------|
+| **商网办公 (AVIC)** | CDP Bridge（需 Windows） |
 | **Telegram** | Easy (just a token) |
 | **WhatsApp** | Medium (scan QR) |
 | **企业微信 (WeCom)** | 企业应用（发消息） |
-| **商网办公 (AVIC)** | CDP Bridge（需 Windows） |
+
 
 <details>
-<summary><b>Telegram</b> (Recommended)</summary>
+<summary><b>商网办公 (Shangwang / AVIC Office)</b></summary>
+
+通过 **Chrome DevTools Protocol (CDP)** 连接已登录的商网办公 Avic.exe（Electron 应用），直接 hook 内嵌的网易云信 NIM SDK，实现消息的实时收发。无需爬虫或 OCR，稳定可靠。
+
+**前提条件**
+- Windows 系统，商网办公 (Avic.exe) 已安装
+- 中国境内网络（商网不支持海外访问）
+
+**1. 启动 Avic.exe（带调试端口）**
+
+修改桌面快捷方式的「目标」，或在 PowerShell 中直接运行：
+
+```powershell
+& "C:\Program Files (x86)\AVIC Office\Avic.exe" --remote-debugging-port=9222
+```
+
+**2. 手动登录商网办公**，进入聊天界面。
+
+**3. 启动 Bridge**
+
+```bash
+cd shangwang-bridge
+pip install -r requirements.txt
+python main.py
+```
+
+**4. 配置 nanobot** (`~/.nanobot/config.json`)
+
+```json
+{
+  "channels": {
+    "shangwang": {
+      "enabled": true,
+      "bridgeUrl": "ws://localhost:3010",
+      "mentionNames": ["程昱涵"],
+      "groupReplyMaxLength": 200
+    }
+  }
+}
+```
+
+- `mentionNames`: 群聊中仅回复 @提及 了这些昵称的消息，私聊不受影响；空数组则回复所有群消息
+- `groupReplyMaxLength`: 群聊回复最大字数（默认 200），超出自动截断
+
+**5. 运行**
+
+```bash
+nanobot gateway
+```
+
+> 详细文档见 [shangwang-bridge/README.md](./shangwang-bridge/README.md)
+
+</details>
+
+<details>
+<summary><b>本地知识库 (RAG)</b></summary>
+
+商网（或任意通道）提问时，agent 可检索本地知识库并基于制度/政策文档回复。
+
+**1. 安装 RAG 依赖**
+
+```bash
+pip install nanobot-ai[rag]
+```
+
+**2. 放置文档**  
+将制度、规范、政策等文件放入 **workspace 下的 `knowledge` 目录**（如 `~/.nanobot/workspace/knowledge/`）。支持：TXT、MD、PDF、Word(.docx)、Excel(.xlsx)。
+
+**3. 导入知识库**
+
+```bash
+nanobot knowledge ingest
+```
+
+或对 agent 说「导入 knowledge 目录到知识库」，agent 会调用 `knowledge_ingest`。
+
+**4. 提问**  
+在商网或 CLI 直接提问，例如「差旅报销标准是什么？」。Agent 会先 `knowledge_search` 检索，再结合结果回答。
+
+可选配置见 `~/.nanobot/config.json` 的 `tools.knowledge`（chunkSize、topK、enabled、webCacheEnabled 等）。  
+**网络搜索缓存**：`web_search` / `web_fetch` 结果会自动存入 `knowledge/短期/_cache_web/` 并 ingest，重复问题可更快回答；每周自动清空。详见 [workspace/knowledge/README.md](./workspace/knowledge/README.md)。
+
+</details>
+<details>
+<summary><b>Telegram</b> </summary>
 
 **1. Create a bot**
 - Open Telegram, search `@BotFather`
@@ -304,90 +387,8 @@ nanobot gateway
 
 </details>
 
-<details>
-<summary><b>商网办公 (Shangwang / AVIC Office)</b></summary>
 
-通过 **Chrome DevTools Protocol (CDP)** 连接已登录的商网办公 Avic.exe（Electron 应用），直接 hook 内嵌的网易云信 NIM SDK，实现消息的实时收发。无需爬虫或 OCR，稳定可靠。
 
-**前提条件**
-- Windows 系统，商网办公 (Avic.exe) 已安装
-- 中国境内网络（商网不支持海外访问）
-
-**1. 启动 Avic.exe（带调试端口）**
-
-修改桌面快捷方式的「目标」，或在 PowerShell 中直接运行：
-
-```powershell
-& "C:\Program Files (x86)\AVIC Office\Avic.exe" --remote-debugging-port=9222
-```
-
-**2. 手动登录商网办公**，进入聊天界面。
-
-**3. 启动 Bridge**
-
-```bash
-cd shangwang-bridge
-pip install -r requirements.txt
-python main.py
-```
-
-**4. 配置 nanobot** (`~/.nanobot/config.json`)
-
-```json
-{
-  "channels": {
-    "shangwang": {
-      "enabled": true,
-      "bridgeUrl": "ws://localhost:3010",
-      "mentionNames": ["程昱涵"],
-      "groupReplyMaxLength": 200
-    }
-  }
-}
-```
-
-- `mentionNames`: 群聊中仅回复 @提及 了这些昵称的消息，私聊不受影响；空数组则回复所有群消息
-- `groupReplyMaxLength`: 群聊回复最大字数（默认 200），超出自动截断
-
-**5. 运行**
-
-```bash
-nanobot gateway
-```
-
-> 详细文档见 [shangwang-bridge/README.md](./shangwang-bridge/README.md)
-
-</details>
-
-<details>
-<summary><b>本地知识库 (RAG)</b></summary>
-
-商网（或任意通道）提问时，agent 可检索本地知识库并基于制度/政策文档回复。
-
-**1. 安装 RAG 依赖**
-
-```bash
-pip install nanobot-ai[rag]
-```
-
-**2. 放置文档**  
-将制度、规范、政策等文件放入 **workspace 下的 `knowledge` 目录**（如 `~/.nanobot/workspace/knowledge/`）。支持：TXT、MD、PDF、Word(.docx)、Excel(.xlsx)。
-
-**3. 导入知识库**
-
-```bash
-nanobot knowledge ingest
-```
-
-或对 agent 说「导入 knowledge 目录到知识库」，agent 会调用 `knowledge_ingest`。
-
-**4. 提问**  
-在商网或 CLI 直接提问，例如「差旅报销标准是什么？」。Agent 会先 `knowledge_search` 检索，再结合结果回答。
-
-可选配置见 `~/.nanobot/config.json` 的 `tools.knowledge`（chunkSize、topK、enabled、webCacheEnabled 等）。  
-**网络搜索缓存**：`web_search` / `web_fetch` 结果会自动存入 `knowledge/_cache_web/` 并 ingest，重复问题可更快回答；每周自动清空。详见 [workspace/knowledge/README.md](./workspace/knowledge/README.md)。
-
-</details>
 
 ## ⚙️ Configuration
 

@@ -4,7 +4,7 @@
 ~~有什么办法能监控所有商网的聊天记录和历史记录，用于训练机器人？比如一个群里面，有客户和运维管理论人，我想把这两类人的问题和答复分别提取出来，学习运维管理员的答复。想说说计划，再来实施。~~ **已实现方案二**：实时监控 + 本地持久化，配置 adminNames/adminIds 区分客户 vs 管理员，`nanobot chat-history export-ingest` 导出并 ingest。
 
 
-> 更新时间: 2026-02-07
+> 更新时间: 2026-02-14
 
 ## 已完成
 
@@ -89,27 +89,28 @@
 - `message` — 消息推送（各通道）
 - `spawn` — 子 agent 异步执行
 
-#### 5.2 待开发工具
+#### 5.2 工具清单
 
-| 工具名 | 功能 | 优先级 | 说明 |
-|--------|------|--------|------|
-| `knowledge_search` | 本地知识库检索 | P0 | RAG 核心，检索财务文档/制度 |
-| `knowledge_ingest` | 文档导入知识库 | P0 | 支持 PDF/Word/Excel/TXT |
-| `calculator` | 精确数值计算 | P1 | 避免 LLM 计算错误，支持财务公式 |
-| `excel_tool` | Excel 读写与分析 | P1 | openpyxl/pandas，读取报表数据 |
-| `calendar` | 日程管理 | P2 | 会议提醒、报表截止日期 |
-| `email_draft` | 邮件草稿生成 | P2 | 生成格式化的财务邮件 |
-| `template_fill` | 模板填充 | P2 | 自动填充财务报表模板 |
-| `ocr` | 图片文字识别 | P3 | 识别扫描件、票据 |
-| `pdf_extract` | PDF 解析 | P1 | 提取 PDF 中的表格和文本 |
+| 工具名 | 功能 | 状态 | 说明 |
+|--------|------|------|------|
+| `knowledge_search` | 本地知识库检索 | ✅ 已实现 | RAG 核心，检索财务文档/制度 |
+| `knowledge_ingest` | 文档导入知识库 | ✅ 已实现 | 支持 PDF/Word/Excel/TXT |
+| `knowledge_list` | 列出已导入文档 | ✅ 已实现 | 辅助检索、避免重复导入 |
+| `calculator` | 精确数值计算 | 待开发 | 避免 LLM 计算错误，支持财务公式 |
+| `excel_tool` | Excel 读写与分析 | 待开发 | openpyxl/pandas，读取报表数据 |
+| `pdf_extract` | PDF 解析 | 待开发 | 提取 PDF 中的表格和文本 |
+| `calendar` | 日程管理 | 待开发 | 会议提醒、报表截止日期 |
+| `email_draft` | 邮件草稿生成 | 待开发 | 生成格式化的财务邮件 |
+| `template_fill` | 模板填充 | 待开发 | 自动填充财务报表模板 |
+| `ocr` | 图片文字识别 | 待开发 | 识别扫描件、票据（image_understander skill 已有 OCR） |
 
 #### 5.3 工具开发路径
 
 ```
-P0 (本周):  knowledge_search + knowledge_ingest
-P1 (下周):  calculator + excel_tool + pdf_extract
-P2 (2周后): calendar + email_draft + template_fill
-P3 (后续):  ocr + 更多专业工具
+P0 ✅ 已完成:  knowledge_search + knowledge_ingest + knowledge_list
+P1 (下一步):  calculator + excel_tool + pdf_extract
+P2 (2周后):   calendar + email_draft + template_fill
+P3 (后续):    ocr 独立工具（或复用 image_understander skill）
 ```
 
 ### Phase 6: 生产化 🚀

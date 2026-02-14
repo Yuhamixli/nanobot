@@ -268,7 +268,7 @@ class KnowledgeStore:
         tool_name: str = "",
     ) -> None:
         """
-        Save web search/fetch result to workspace/knowledge/_cache_web/ and ingest into web cache collection.
+        Save web search/fetch result to workspace/knowledge/短期/_cache_web/ and ingest into web cache collection.
         """
         if not text or not text.strip():
             return

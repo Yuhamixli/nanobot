@@ -266,20 +266,31 @@ At this point, it is time to actually create the skill.
 
 Skip this step only if the skill being developed already exists, and iteration or packaging is needed. In this case, continue to the next step.
 
-When creating a new skill from scratch, always run the `init_skill.py` script. The script conveniently generates a new template skill directory that automatically includes everything a skill requires, making the skill creation process much more efficient and reliable.
+When creating a new skill from scratch, always run the init command. It generates a new template skill directory that automatically includes everything a skill requires, making the skill creation process much more efficient and reliable.
 
-Usage:
+**Usage (preferred - CLI):**
 
 ```bash
-scripts/init_skill.py <skill-name> --path <output-directory> [--resources scripts,references,assets] [--examples]
+nanobot skill init <skill-name> [--path <output-directory>] [--resources scripts,references,assets] [--examples]
 ```
 
-Examples:
+**Usage (Python script directly):**
 
 ```bash
-scripts/init_skill.py my-skill --path skills/public
-scripts/init_skill.py my-skill --path skills/public --resources scripts,references
-scripts/init_skill.py my-skill --path skills/public --resources scripts --examples
+python nanobot/skills/skill-creator/scripts/init_skill.py <skill-name> --path <output-directory> [--resources scripts,references,assets] [--examples]
+```
+
+**Examples:**
+
+```bash
+# Default: creates in workspace/skills (e.g. ~/.nanobot/workspace/skills)
+nanobot skill init my-skill
+
+# With resources and examples
+nanobot skill init my-skill --resources scripts,references --examples
+
+# Custom path (e.g. when cwd is workspace)
+nanobot skill init my-skill --path skills --resources scripts,references
 ```
 
 The script:
@@ -332,32 +343,9 @@ Do not include any other fields in YAML frontmatter.
 
 Write instructions for using the skill and its bundled resources.
 
-### Step 5: Packaging a Skill
+### Step 5: Packaging a Skill (optional)
 
-Once development of the skill is complete, it must be packaged into a distributable .skill file that gets shared with the user. The packaging process automatically validates the skill first to ensure it meets all requirements:
-
-```bash
-scripts/package_skill.py <path/to/skill-folder>
-```
-
-Optional output directory specification:
-
-```bash
-scripts/package_skill.py <path/to/skill-folder> ./dist
-```
-
-The packaging script will:
-
-1. **Validate** the skill automatically, checking:
-
-   - YAML frontmatter format and required fields
-   - Skill naming conventions and directory structure
-   - Description completeness and quality
-   - File organization and resource references
-
-2. **Package** the skill if validation passes, creating a .skill file named after the skill (e.g., `my-skill.skill`) that includes all files and maintains the proper directory structure for distribution. The .skill file is a zip file with a .skill extension.
-
-If validation fails, the script will report the errors and exit without creating a package. Fix any validation errors and run the packaging command again.
+nanobot does not yet include a `package_skill` script. Skills in `workspace/skills/` are loaded directly. To share a skill, copy the skill folder or zip it manually. A future version may add `nanobot skill package` for .skill distribution.
 
 ### Step 6: Iterate
 
