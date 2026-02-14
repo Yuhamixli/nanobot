@@ -34,6 +34,8 @@ class ShangwangConfig(BaseModel):
     enabled: bool = False
     bridge_url: str = "ws://localhost:3010"
     allow_from: list[str] = Field(default_factory=list)  # Allowed chat_id/sender, empty = allow all
+    # 文件下载失败时从此目录复制（如 C:\Zoolo\AvicOffice Files），bridge 会优先读取 nanobot 配置
+    avicoffice_cache_dir: str = ""
     # 群聊仅回复 @提及 的消息，可配置多个昵称（如 ["程昱涵"]），私聊不受影响
     mention_names: list[str] = Field(default_factory=list)
     # 群聊回复最大字数（字符），超出则截断

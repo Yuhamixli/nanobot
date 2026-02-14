@@ -108,7 +108,7 @@ CDP 目标: http://127.0.0.1:9222
 | `SHANGWANG_CDP_PORT` | `9222` | CDP 端口 |
 | `SHANGWANG_POLL_INTERVAL` | `3` | 消息轮询间隔(秒) |
 | `SHANGWANG_FILES_DIR` | `workspace/shangwang-files` | 附件下载目录（与 nanobot workspace 统一） |
-| `SHANGWANG_AVICOFFICE_CACHE` | （空） | AvicOffice 缓存目录，下载失败时从此处复制（如 `C:\Zoolo\AvicOffice Files`） |
+| `SHANGWANG_AVICOFFICE_CACHE` | （空） | AvicOffice 缓存目录。**推荐**在 nanobot 主配置 `~/.nanobot/config.json` 的 `channels.shangwang.avicofficeCacheDir` 中配置，bridge 会优先读取 |
 
 ## 协议
 

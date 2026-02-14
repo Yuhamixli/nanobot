@@ -32,6 +32,11 @@
       "enabled": false,
       "bridgeUrl": "ws://localhost:3001",
       "allowFrom": []
+    },
+    "shangwang": {
+      "enabled": false,
+      "bridgeUrl": "ws://localhost:3010",
+      "avicofficeCacheDir": "C:\\Zoolo\\AvicOffice Files"
     }
   },
   "gateway": {
