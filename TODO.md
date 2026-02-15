@@ -4,7 +4,7 @@
 ~~有什么办法能监控所有商网的聊天记录和历史记录，用于训练机器人？比如一个群里面，有客户和运维管理论人，我想把这两类人的问题和答复分别提取出来，学习运维管理员的答复。想说说计划，再来实施。~~ **已实现方案二**：实时监控 + 本地持久化，配置 adminNames/adminIds 区分客户 vs 管理员，`nanobot chat-history export-ingest` 导出并 ingest。
 
 
-> 更新时间: 2026-02-14
+> 更新时间: 2026-02-15
 
 ## 已完成
 
@@ -32,6 +32,25 @@
 ---
 
 ## 进行中 / 待完成
+
+### Phase 2.5: 代码审计整改（2026-02-15）🧪
+
+#### P0（立即修复，保证正确性）
+- [ ] 修复 `AgentLoop.process_direct`：`session_key` 参数目前未生效，导致 CLI 会话串线
+- [ ] 修复 `gateway` 心跳维护分支中的 `logger` 未定义问题（避免定时清理时崩溃）
+- [ ] 修复 `knowledge_get_document` 的 Chroma `get()` 结果解析（当前索引结构与实际返回不一致）
+- [ ] 修复 `browser_automation` 的 `extract` 逻辑（`textContent/innerText/innerHTML` 读取方式不正确）
+
+#### P1（本周内，降低维护成本）
+- [ ] 抽取统一的 LLM + tool 调度循环，合并 `AgentLoop` 主流程、system 流程、`SubagentManager` 重复代码
+- [ ] 抽取 CLI 公共函数：Provider 配置校验、商网 bridge URL 规范化（目前多处重复）
+- [ ] 抽取 `ChatHistoryRecorder` 公共 JSONL 读取函数，统一异常处理与数据清洗
+- [ ] 统一文件名清洗函数（`safe_filename/_sanitize_filename/_safe_filename`）避免规则漂移
+
+#### P2（治理项）
+- [ ] 统一版本号来源（`pyproject.toml` 与 `nanobot/__init__.py` 当前不一致）
+- [ ] 固化测试环境并启用 async 测试必跑（当前有 async case 被 skip）
+- [ ] 清理仓库已提交的 `__pycache__/*.pyc` 构建产物并加入发布前检查
 
 ### Phase 3: 角色 Prompt 与安全 🔒
 - [x] 起草航空工业财务智能办公助手 system prompt（中航小诺）：见 `workspace/AGENTS.md`，角色为司库管理 AI 智能员工，融合技术/业务/财务/税务，覆盖穿透监管、资金集中与结算等，回答专业准确精简，不透露实现与产品信息，开发者程昱涵（航空工业财务公司）
@@ -83,7 +102,7 @@
 
 #### 5.1 已有工具
 - `read_file` / `write_file` / `edit_file` — 文件操作
-- `shell` — 命令执行
+- `exec` — 命令执行
 - `web_search` / `web_fetch` — 网页搜索与抓取
 - `browser_automation` — 浏览器自动化（Playwright）
 - `message` — 消息推送（各通道）

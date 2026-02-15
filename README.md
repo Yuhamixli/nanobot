@@ -12,7 +12,7 @@
 
 🐈 **nanobot** is an **ultra-lightweight** personal AI assistant inspired by [Clawdbot](https://github.com/openclaw/openclaw) 
 
-⚡️ Delivers core agent functionality in just **~4,000** lines of code — **99% smaller** than Clawdbot's 430k+ lines.
+⚡️ Delivers core agent functionality in roughly **~7,000+ Python LOC** (2026-02 snapshot), still with a compact and readable architecture.
 
 ## 📢 News
 
@@ -20,7 +20,7 @@
 
 ## Key Features of nanobot:
 
-🪶 **Ultra-Lightweight**: Just ~4,000 lines of code — 99% smaller than Clawdbot - core functionality.
+🪶 **Ultra-Lightweight**: Core capabilities in ~7k Python lines, focused on readable architecture and maintainable modules.
 
 🔬 **Research-Ready**: Clean, readable code that's easy to understand, modify, and extend for research.
 
@@ -33,6 +33,38 @@
 <p align="center">
   <img src="nanobot_arch.png" alt="nanobot architecture" width="800">
 </p>
+
+## 🔍 Code Audit (2026-02-15)
+
+本次审计覆盖 `nanobot/`、`shangwang-bridge/`、`bridge/`，重点检查了代码冗余、实现逻辑一致性、可维护性与测试有效性。
+
+### 核心执行链路（当前实现）
+
+1. `nanobot cli` 启动后，创建 `MessageBus`、`AgentLoop`、`ChannelManager`、`CronService`、`HeartbeatService`。
+2. 渠道消息统一进入 `InboundMessage`，由 `AgentLoop` 组装上下文并调用 LLM。
+3. Tool Calling 通过 `ToolRegistry` 执行（文件、命令、Web、RAG、消息、子 agent）。
+4. 输出统一为 `OutboundMessage`，由 `ChannelManager` 分发到 Telegram/WhatsApp/商网/WeCom。
+5. 商网链路通过 `shangwang-bridge`（CDP + NIM hook）转发消息与附件。
+
+### 主要问题（按优先级）
+
+| 优先级 | 类型 | 发现 | 建议 |
+|---|---|---|---|
+| P0 | 逻辑缺陷 | `AgentLoop.process_direct` 的 `session_key` 参数未生效，所有 CLI 直连对话写入同一会话 | 在 `process_direct` 中按 `session_key` 拆分 `channel/chat_id` 或直接显式传递会话键 |
+| P0 | 逻辑缺陷 | `knowledge_get_document` 读取 Chroma `get()` 结果时按嵌套结构访问，可能导致文档 chunk 读取异常 | 统一按 Chroma `get()` 的扁平返回结构解析，并补单元测试 |
+| P0 | 逻辑缺陷 | `browser_automation` 的 `extract` 对 `textContent/innerText/innerHTML` 使用 `get_attribute`，结果可能为空 | 改为 `inner_text()/text_content()/evaluate()` 读取 DOM 属性 |
+| P0 | 稳定性 | `gateway` 心跳清理分支使用 `logger` 但文件未导入，触发时会抛 `NameError` | 引入统一 logger 或改为 `console/logging` |
+| P1 | 冗余 | 主 agent、system 消息处理、subagent 各自实现一套近似 LLM-tool 循环 | 抽取统一 `run_llm_with_tools()` 执行器，减少三处重复 |
+| P1 | 冗余 | CLI 中 API Key 检查与商网 bridge URL 规范化逻辑重复 | 抽成 `_validate_provider_config()` 与 `_normalize_ws_url()` 工具函数 |
+| P1 | 冗余 | `ChatHistoryRecorder` 多处重复 JSONL 读取解析 | 抽 `_load_rows(path)`，统一异常与空行处理 |
+| P2 | 一致性 | 包版本号存在双源：`pyproject.toml` 与 `nanobot/__init__.py` 不一致 | 统一单一版本源（建议来自 `pyproject`） |
+| P2 | 测试 | 当前 async 测试被跳过（缺少 `pytest-asyncio` 实际生效环境） | CI 固化 dev 依赖并将 async 测试改为必跑 |
+
+### 审计建议（实施顺序）
+
+1. 先修 P0（逻辑正确性）并补最小回归测试。
+2. 再做 P1（重复实现收敛），降低后续功能迭代成本。
+3. 最后处理 P2（版本与测试治理），避免发布与运维偏差。
 
 ## ✨ Features
 
